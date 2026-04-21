@@ -1,0 +1,136 @@
+{
+  "entities": {
+    "Script": {
+      "title": "Script",
+      "description": "A generated script for voice-over.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The ID of the user who generated the script."
+        },
+        "sourceUrl": {
+          "type": "string",
+          "description": "The URL of the source content."
+        },
+        "sourceText": {
+          "type": "string",
+          "description": "The raw text of the source content."
+        },
+        "sourceType": {
+          "type": "string",
+          "enum": ["video", "article", "social", "text"],
+          "description": "The type of the source content."
+        },
+        "intention": {
+          "type": "string",
+          "description": "The editorial intention (e.g., summarize, analyze)."
+        },
+        "tone": {
+          "type": "string",
+          "description": "The tone of the script (e.g., neutral, incisive)."
+        },
+        "stance": {
+          "type": "string",
+          "description": "The stance of the script."
+        },
+        "duration": {
+          "type": "string",
+          "description": "The target duration of the script."
+        },
+        "content": {
+          "type": "string",
+          "description": "The generated script content."
+        },
+        "reflectionTime": {
+          "type": "number",
+          "description": "The time taken by the AI to reflect before generating the script."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The time the script was created."
+        }
+      },
+      "required": ["userId", "sourceType", "intention", "tone", "duration", "content", "createdAt"]
+    },
+    "User": {
+      "title": "User",
+      "description": "A user of the application.",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "photoURL": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "deletedNotifications": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Array of notification IDs the user has deleted."
+        },
+        "readNotifications": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Array of notification IDs the user has read."
+        }
+      },
+      "required": ["email", "createdAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "A global notification for users.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["update", "info", "alert"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["title", "message", "type", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/User"
+      },
+      "description": "User profiles."
+    },
+    "/scripts/{scriptId}": {
+      "schema": {
+        "$ref": "#/entities/Script"
+      },
+      "description": "Generated scripts."
+    },
+    "/notifications/{notificationId}": {
+      "schema": {
+        "$ref": "#/entities/Notification"
+      },
+      "description": "Global notifications."
+    }
+  }
+}
