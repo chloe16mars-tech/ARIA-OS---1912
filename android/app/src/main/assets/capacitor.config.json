@@ -1,0 +1,6 @@
+{
+	"appId": "com.creator.studio",
+	"appName": "Studio Creator",
+	"webDir": "dist/app/browser",
+	"bundledWebRuntime": false
+}

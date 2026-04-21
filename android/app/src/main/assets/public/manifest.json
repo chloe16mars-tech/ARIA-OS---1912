@@ -1,0 +1,16 @@
+{
+  "name": "1912",
+  "short_name": "1912",
+  "description": "ScriptForge by 1912 - Media content creation tool",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0A0A0C",
+  "theme_color": "#0A0A0C",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}
