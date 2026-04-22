@@ -1,0 +1,8 @@
+{
+  "name": "1912",
+  "description": "ScriptForge by 1912 - Media content creation tool",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}

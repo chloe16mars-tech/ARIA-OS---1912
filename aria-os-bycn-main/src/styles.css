@@ -1,0 +1,94 @@
+/* You can add global styles to this file, and also import other style files */
+@import url('https://fonts.googleapis.com/icon?family=Material+Icons');
+@import url('https://fonts.googleapis.com/css2?family=Exo:ital,wght@0,100..900;1,100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Pacifico&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Space+Grotesk:wght@400;500;600;700&family=Oswald:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Exo", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+
+@custom-variant dark (&:is(.dark *));
+
+@keyframes scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-scroll {
+  animation: scroll 30s linear infinite;
+}
+
+.mask-image-edges {
+  mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent);
+}
+
+@keyframes flagScroll {
+  0% { background-position: 0 100%; }
+  100% { background-position: 0 0; }
+}
+
+.gabon-fluid-text {
+  background: linear-gradient(to bottom, 
+    #009E60 0%, #009E60 16.666%, 
+    #FCD116 16.666%, #FCD116 33.333%, 
+    #3A75C4 33.333%, #3A75C4 50%,
+    #009E60 50%, #009E60 66.666%, 
+    #FCD116 66.666%, #FCD116 83.333%, 
+    #3A75C4 83.333%, #3A75C4 100%
+  );
+  background-size: 100% 200%;
+  animation: flagScroll 2s linear infinite;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: transparent;
+  display: inline-block;
+}
+
+.bg-cakenews-pattern {
+  background-image: url("data:image/svg+xml,%3Csvg width='150' height='150' xmlns='http://www.w3.org/2000/svg'%3E%3Ctext x='20' y='30' font-family='sans-serif' font-size='12' font-weight='bold' fill='%23000000' transform='rotate(30 20 30)'%3EC4kenews%3C/text%3E%3Ctext x='90' y='70' font-family='sans-serif' font-size='12' font-weight='bold' fill='%23000000' transform='rotate(-45 90 70)'%3EC4kenews%3C/text%3E%3Ctext x='30' y='110' font-family='sans-serif' font-size='12' font-weight='bold' fill='%23000000' transform='rotate(15 30 110)'%3EC4kenews%3C/text%3E%3Ctext x='110' y='130' font-family='sans-serif' font-size='12' font-weight='bold' fill='%23000000' transform='rotate(-60 110 130)'%3EC4kenews%3C/text%3E%3C/svg%3E");
+  background-repeat: repeat;
+}
+.dark .bg-cakenews-pattern {
+  background-image: url("data:image/svg+xml,%3Csvg width='150' height='150' xmlns='http://www.w3.org/2000/svg'%3E%3Ctext x='20' y='30' font-family='sans-serif' font-size='12' font-weight='bold' fill='%23ffffff' transform='rotate(30 20 30)'%3EC4kenews%3C/text%3E%3Ctext x='90' y='70' font-family='sans-serif' font-size='12' font-weight='bold' fill='%23ffffff' transform='rotate(-45 90 70)'%3EC4kenews%3C/text%3E%3Ctext x='30' y='110' font-family='sans-serif' font-size='12' font-weight='bold' fill='%23ffffff' transform='rotate(15 30 110)'%3EC4kenews%3C/text%3E%3Ctext x='110' y='130' font-family='sans-serif' font-size='12' font-weight='bold' fill='%23ffffff' transform='rotate(-60 110 130)'%3EC4kenews%3C/text%3E%3C/svg%3E");
+}
+
+/* Disable all transitions globally */
+* {
+  transition: none !important;
+  animation-duration: 0s !important;
+}
+
+/* Re-enable specific animations that are required */
+.animate-scroll {
+  animation-duration: 30s !important;
+}
+.gabon-fluid-text {
+  animation-duration: 2s !important;
+}
+.animate-spin {
+  animation-duration: 1s !important;
+}
+.animate-pulse {
+  animation-duration: 2s !important;
+}
+.animate-fade-in {
+  animation-duration: 0.2s !important;
+}
+.transition-colors {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke !important;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important;
+  transition-duration: 150ms !important;
+}
+.transition-transform {
+  transition-property: transform !important;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important;
+  transition-duration: 150ms !important;
+}
+.transition-all {
+  transition-property: all !important;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important;
+  transition-duration: 300ms !important;
+}
