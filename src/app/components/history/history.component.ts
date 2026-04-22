@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy, signal, computed, inject, ChangeDetectionStrategy } from '@angular/core';
-import { FirestoreService, ScriptData } from '../../services/firestore.service';
+import { ScriptService, ScriptData } from '../../services/script.service';
 import { MatIconModule } from '@angular/material/icon';
 import { DatePipe } from '@angular/common';
 import { Router } from '@angular/router';
@@ -16,7 +16,7 @@ import { ToastService } from '../../services/toast.service';
   templateUrl: './history.component.html'
 })
 export class HistoryComponent implements OnInit, OnDestroy {
-  private firestoreService = inject(FirestoreService);
+  private scriptService = inject(ScriptService);
   private router = inject(Router);
   private toastService = inject(ToastService);
 
@@ -74,11 +74,11 @@ export class HistoryComponent implements OnInit, OnDestroy {
   });
 
   ngOnInit() {
-    this.unsubscribeActive = this.firestoreService.getScriptsSnapshot((data) => {
+    this.unsubscribeActive = this.scriptService.getScriptsSnapshot((data) => {
       this.activeScripts.set(data);
       this.loading.set(false);
     });
-    this.unsubscribeTrash = this.firestoreService.getTrashedScriptsSnapshot((data) => {
+    this.unsubscribeTrash = this.scriptService.getTrashedScriptsSnapshot((data) => {
       this.trashedScripts.set(data);
     });
   }
@@ -97,7 +97,7 @@ export class HistoryComponent implements OnInit, OnDestroy {
     if (!script.id) return;
     try {
       const newPinnedStatus = !script.pinned;
-      await this.firestoreService.updateScript(script.id, { pinned: newPinnedStatus });
+      await this.scriptService.updateScript(script.id, { pinned: newPinnedStatus });
       this.toastService.success(newPinnedStatus ? 'Script épinglé' : 'Script désépinglé');
     } catch (error) {
       console.error('Error pinning script', error);
@@ -121,7 +121,7 @@ export class HistoryComponent implements OnInit, OnDestroy {
     }
     
     try {
-      await this.firestoreService.updateScript(id, { title: newTitle.trim() });
+      await this.scriptService.updateScript(id, { title: newTitle.trim() });
       this.editingTitleId.set(null);
       this.toastService.success('Titre modifié');
     } catch (error) {
@@ -161,7 +161,7 @@ export class HistoryComponent implements OnInit, OnDestroy {
     if (!id) return;
     
     try {
-      await this.firestoreService.moveToTrash(id);
+      await this.scriptService.moveToTrash(id);
       if (this.selectedScript()?.id === id) {
         this.closeScript();
       }
@@ -185,7 +185,7 @@ export class HistoryComponent implements OnInit, OnDestroy {
     if (!id) return;
     
     try {
-      await this.firestoreService.deleteScript(id);
+      await this.scriptService.deleteScript(id);
       if (this.selectedScript()?.id === id) {
         this.closeScript();
       }
@@ -198,7 +198,7 @@ export class HistoryComponent implements OnInit, OnDestroy {
   async restoreScript(id: string, event: Event) {
     event.stopPropagation();
     try {
-      await this.firestoreService.restoreScript(id);
+      await this.scriptService.restoreScript(id);
       this.toastService.success('Script restauré.');
     } catch (error) {
       console.error('Error restoring script', error);

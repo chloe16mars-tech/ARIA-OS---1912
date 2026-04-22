@@ -1,6 +1,6 @@
 {
-  "name": "app",
-  "short_name": "app",
+  "name": "ARIA OS",
+  "short_name": "ARIA OS",
   "display": "standalone",
   "scope": "./",
   "start_url": "./",

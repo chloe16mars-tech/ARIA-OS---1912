@@ -1,8 +1,9 @@
 import { Injectable, signal } from '@angular/core';
 import { auth, db } from '../../firebase';
-import { GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut, User, onAuthStateChanged, signInAnonymously } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithPopup, signInWithCredential, signOut, User, onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { Capacitor } from '@capacitor/core';
+import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 
 @Injectable({
   providedIn: 'root'
@@ -62,13 +63,18 @@ export class AuthService {
   }
 
   async loginWithGoogle() {
-    const provider = new GoogleAuthProvider();
     try {
       if (Capacitor.isNativePlatform()) {
-        // Native platforms fail with Popup, redirect is the fallback web-based method for mobile
-        // Ideally we would use @capacitor-firebase/authentication for true native Google accounts
-        await signInWithRedirect(auth, provider);
+        const result = await FirebaseAuthentication.signInWithGoogle();
+        const credential = GoogleAuthProvider.credential(
+          result.credential?.idToken,
+          result.credential?.accessToken
+        );
+        const userCredential = await signInWithCredential(auth, credential);
+        this.currentUser.set(userCredential.user);
+        this.ensureUserDocument(userCredential.user).catch(console.error);
       } else {
+        const provider = new GoogleAuthProvider();
         const credential = await signInWithPopup(auth, provider);
         this.currentUser.set(credential.user);
         this.ensureUserDocument(credential.user).catch(console.error);

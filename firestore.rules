@@ -129,14 +129,7 @@ service cloud.firestore {
     }
     match /stats/{statId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && 
-                    statId == 'global' && 
-                    hasRequiredFields(['totalGenerations']) && 
-                    request.resource.data.totalGenerations is number;
-      allow update: if isAuthenticated() && 
-                    statId == 'global' && 
-                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['totalGenerations']) &&
-                    request.resource.data.totalGenerations == resource.data.totalGenerations + 1;
+      allow write: if false; // Only backend admin SDK can write here now
     }
 
     match /notifications/{notificationId} {

@@ -3,6 +3,7 @@ import { AuthService } from '../../services/auth.service';
 import { Router } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { CguComponent } from '../cgu/cgu.component';
+import { Capacitor } from '@capacitor/core';
 
 @Component({
   selector: 'app-login',
@@ -106,15 +107,27 @@ export class LoginComponent {
     } catch (error) {
       console.error('Login error', error);
       
-      const err = error as { code?: string; message?: string };
-      if (err?.code === 'auth/network-request-failed') {
-        this.errorMessage.set("🛑 Connexion bloquée par le navigateur ou l'aperçu. \n\nCe problème peut survenir dans l'éditeur (iFrame) ou si vous utilisez un bloqueur de publicité.\n\n→ Veuillez ouvrir l'application dans un NOUVEL ONGLET en cliquant sur la petite flèche (↗️) en haut à droite, ou désactiver votre bloqueur pour ce site.");
-      } else if (err?.code === 'auth/popup-closed-by-user') {
-        this.errorMessage.set("La fenêtre de connexion Google a été fermée avant la fin.");
-      } else if (err?.code === 'auth/cancelled-popup-request') {
-        this.errorMessage.set("Une autre tentative de connexion est déjà en cours.");
+        const err = Object(error);
+      const isNative = Capacitor.isNativePlatform();
+      
+      // Determine error code correctly depending on whether it's a native plugin error or Firebase web error
+      const errorCode = err?.code || err?.message || '';
+
+      if (errorCode.includes('network-request-failed') || errorCode.includes('network error') || errorCode.includes('OFFLINE')) {
+        this.errorMessage.set(`🔌 Vous êtes hors ligne.\nVeuillez vérifier votre connexion internet (Wi-Fi ou données mobiles) et réessayer.`);
+      } else if (errorCode.includes('popup-closed-by-user') || errorCode.includes('SIGN_IN_CANCELLED')) {
+        this.errorMessage.set("💡 La fenêtre de connexion a été fermée. Vous pouvez réessayer quand vous serez prêt.");
+      } else if (errorCode.includes('cancelled-popup-request') || errorCode.includes('SIGN_IN_IN_PROGRESS')) {
+        this.errorMessage.set("⌛ Une tentative de connexion est déjà en cours. Veuillez patienter.");
+      } else if (errorCode.includes('internal-error')) {
+        this.errorMessage.set("⚙️ Une erreur interne s'est produite lors de la connexion. Veuillez réessayer plus tard.");
       } else {
-        this.errorMessage.set("Erreur lors de la connexion avec Google.");
+        // Fallback for iframe web preview if really needed, but keep it clean
+        if (!isNative && errorCode.includes('cross-origin')) {
+           this.errorMessage.set("🛑 La connexion est bloquée par votre navigateur.\n\nVeuillez autoriser les fenêtres pop-up ou ouvrir l'application dans un nouvel onglet.");
+        } else {
+           this.errorMessage.set("⚠️ Impossible de se connecter pour le moment. Veuillez réessayer.");
+        }
       }
       this.isLoadingGoogle.set(false);
     }
@@ -130,13 +143,15 @@ export class LoginComponent {
       this.router.navigate(['/']);
     } catch (error: unknown) {
       console.error('Anonymous login error', error);
-      const err = error as { code?: string };
-      if (err?.code === 'auth/network-request-failed') {
-        this.errorMessage.set("🛑 Connexion bloquée par le navigateur ou l'aperçu. \n\nCe problème peut survenir dans l'éditeur (iFrame) ou si vous utilisez un bloqueur de publicité (Brave, uBlock).\n\n→ Veuillez ouvrir l'application dans un NOUVEL ONGLET en cliquant sur la petite flèche (↗️) en haut à droite, ou désactiver votre bloqueur pour ce site.");
-      } else if (err?.code === 'auth/admin-restricted-operation') {
-        this.errorMessage.set("La connexion anonyme n'est pas activée. Veuillez l'activer dans la console Firebase (Authentication > Sign-in method).");
+      const err = Object(error);
+      const errorCode = err?.code || err?.message || '';
+      
+      if (errorCode.includes('network-request-failed') || errorCode.includes('network error') || errorCode.includes('OFFLINE')) {
+        this.errorMessage.set(`🔌 Vous êtes hors ligne.\nVeuillez vérifier votre connexion internet (Wi-Fi ou données mobiles) et réessayer.`);
+      } else if (errorCode.includes('admin-restricted-operation')) {
+        this.errorMessage.set("🔧 La connexion invitée a été temporairement désactivée par l'administrateur.");
       } else {
-        this.errorMessage.set("Erreur lors de la connexion anonyme.");
+        this.errorMessage.set("⚠️ Impossible d'accéder au mode invité pour le moment. Veuillez réessayer.");
       }
       this.isLoadingAnon.set(false);
     }

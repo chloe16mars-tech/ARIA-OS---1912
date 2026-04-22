@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, signal, inject } from '@angular/core';
 import { AuthService } from '../../services/auth.service';
 import { ThemeService } from '../../services/theme.service';
-import { FirestoreService, UserProfile } from '../../services/firestore.service';
+import { UserService, UserProfile } from '../../services/user.service';
 import { Router } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { DatePipe } from '@angular/common';
@@ -180,11 +180,11 @@ export class SettingsComponent implements OnInit, OnDestroy {
 
   public authService = inject(AuthService);
   public themeService = inject(ThemeService);
-  private firestoreService = inject(FirestoreService);
+  private userService = inject(UserService);
   public router = inject(Router);
 
   ngOnInit() {
-    this.unsubscribeProfile = this.firestoreService.getUserProfileSnapshot((data) => {
+    this.unsubscribeProfile = this.userService.getUserProfileSnapshot((data) => {
       this.userProfile.set(data);
     });
   }
@@ -219,11 +219,11 @@ export class SettingsComponent implements OnInit, OnDestroy {
 
   async executeDeleteAccount() {
     this.showDeleteModal.set(false);
-    await this.firestoreService.scheduleAccountDeletion();
+    await this.userService.scheduleAccountDeletion();
   }
 
   async cancelDeletion() {
-    await this.firestoreService.cancelAccountDeletion();
+    await this.userService.cancelAccountDeletion();
   }
 
   contactTeam() {

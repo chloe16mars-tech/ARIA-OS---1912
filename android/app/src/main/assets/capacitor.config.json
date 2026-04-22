@@ -2,5 +2,13 @@
 	"appId": "com.creator.studio",
 	"appName": "Studio Creator",
 	"webDir": "dist/app/browser",
-	"bundledWebRuntime": false
+	"bundledWebRuntime": false,
+	"plugins": {
+		"FirebaseAuthentication": {
+			"skipNativeAuth": false,
+			"providers": [
+				"google.com"
+			]
+		}
+	}
 }

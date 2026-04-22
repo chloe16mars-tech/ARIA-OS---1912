@@ -1,22 +1,19 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, enableIndexedDbPersistence } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, memoryLocalCache } from 'firebase/firestore';
+import { Capacitor } from '@capacitor/core';
 import firebaseConfig from '../firebase-applet-config.json';
 
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 
-// Enable offline persistence for instant loading
-enableIndexedDbPersistence(db).catch((err) => {
-  if (err.code == 'failed-precondition') {
-    // Multiple tabs open, persistence can only be enabled in one tab at a a time.
-    console.warn("Multiple tabs open, Firestore persistence disabled.");
-  } else if (err.code == 'unimplemented') {
-    // The current browser does not support all of the features required to enable persistence
-    console.warn("Current browser does not support Firestore persistence.");
-  }
-});
+// Fix for Android WebView extreme slowness:
+// 1. Avoid enableIndexedDbPersistence which causes a known 30-sec IndexedDB lock contention with Firebase Auth.
+// 2. Use modern initializeFirestore.
+// 3. Optional: Use memory cache on native to completely avoid IndexedDB locking issues during auth, or use modern persistentLocalCache with tab manager.
+export const db = initializeFirestore(app, {
+  localCache: Capacitor.isNativePlatform() ? memoryLocalCache() : persistentLocalCache({tabManager: persistentMultipleTabManager()})
+}, firebaseConfig.firestoreDatabaseId);
 
 export enum OperationType {
   CREATE = 'create',

@@ -2,7 +2,8 @@ import { Component, signal, computed, OnInit, OnDestroy, inject, effect, ChangeD
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { GeminiService } from '../../services/gemini.service';
-import { FirestoreService, ScriptData } from '../../services/firestore.service';
+import { ScriptService, ScriptData } from '../../services/script.service';
+import { UserService, UserProfile } from '../../services/user.service';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
@@ -642,7 +643,8 @@ export class HomeComponent implements OnInit, OnDestroy {
   });
 
   private geminiService = inject(GeminiService);
-  private firestoreService = inject(FirestoreService);
+  private scriptService = inject(ScriptService);
+  private userService = inject(UserService);
   public authService = inject(AuthService);
   private toastService = inject(ToastService);
   public router = inject(Router);
@@ -661,7 +663,7 @@ export class HomeComponent implements OnInit, OnDestroy {
        const stance = this.selectedStance();
        const duration = this.selectedDuration();
        if (!this.isAnonymous() && intent && tone && stance && duration) {
-          this.firestoreService.saveUserPreferences({ intention: intent, tone, stance, duration });
+          this.userService.saveUserPreferences({ intention: intent, tone, stance, duration });
        }
     });
 
@@ -690,7 +692,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   ngOnInit() {
     this.startAdRotation();
     if (!this.isAnonymous()) {
-      this.unsubscribeProfile = this.firestoreService.getUserProfileSnapshot(profile => {
+      this.unsubscribeProfile = this.userService.getUserProfileSnapshot(profile => {
         if (profile?.preferences && this.currentStep() < 3) {
            if (profile.preferences.intention) this.selectedIntention.set(profile.preferences.intention);
            if (profile.preferences.tone) this.selectedTone.set(profile.preferences.tone);
@@ -820,9 +822,6 @@ export class HomeComponent implements OnInit, OnDestroy {
       // Final result is already set via progress callback, but we can ensure it's complete
       this.generatedScript.set(result.script);
       this.generationDate.set(new Date());
-      
-      // Increment global counter
-      await this.firestoreService.incrementGlobalCounter();
     } catch (error: unknown) {
       console.error(error);
       let errorMessage = 'Une erreur inattendue est survenue lors de la génération. Veuillez réessayer.';
@@ -870,7 +869,7 @@ export class HomeComponent implements OnInit, OnDestroy {
         scriptData.sourceText = this.sourceText();
       }
 
-      await this.firestoreService.saveScript(scriptData);
+      await this.scriptService.saveScript(scriptData);
     } catch (error) {
       console.error('Save error', error);
       // Revert if failed

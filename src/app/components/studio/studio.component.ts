@@ -4,7 +4,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { Location } from '@angular/common';
 import { VideoService } from '../../services/video.service';
 import { ToastService } from '../../services/toast.service';
-import { FirestoreService, ScriptData } from '../../services/firestore.service';
+import { ScriptService, ScriptData } from '../../services/script.service';
 
 @Component({
   selector: 'app-studio',
@@ -331,7 +331,7 @@ export class StudioComponent implements OnInit, OnDestroy {
   private ngZone = inject(NgZone);
   private videoService = inject(VideoService);
   private toastService = inject(ToastService);
-  private firestoreService = inject(FirestoreService);
+  private scriptService = inject(ScriptService);
 
   showScriptSelector = signal(false);
   scripts = signal<ScriptData[]>([]);
@@ -466,7 +466,7 @@ export class StudioComponent implements OnInit, OnDestroy {
     this.showScriptSelector.set(true);
     this.isLoadingScripts.set(true);
     this.visibleScriptsLimit.set(10);
-    this.unsubscribeScripts = this.firestoreService.getScriptsSnapshot(scripts => {
+    this.unsubscribeScripts = this.scriptService.getScriptsSnapshot(scripts => {
       this.scripts.set(scripts || []);
       this.isLoadingScripts.set(false);
     });

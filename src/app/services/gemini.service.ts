@@ -1,10 +1,11 @@
-import { Injectable } from '@angular/core';
-import { GoogleGenAI } from '@google/genai';
+import { Injectable, inject } from '@angular/core';
+import { AuthService } from './auth.service';
 
 @Injectable({
   providedIn: 'root'
 })
 export class GeminiService {
+  private authService = inject(AuthService);
   
   async analyzeAndGenerateScript(
     sourceUrl: string,
@@ -16,93 +17,88 @@ export class GeminiService {
     onProgress?: (text: string) => void
   ): Promise<{ script: string, type: 'video' | 'article' | 'social' | 'text' }> {
     
-    let type: 'video' | 'article' | 'social' | 'text' = 'text';
-    const model = 'gemini-3.1-pro-preview';
-    let tools: Record<string, unknown>[] = [];
-    let prompt = '';
-
-    if (sourceUrl) {
-      if (sourceUrl.includes('youtube.com') || sourceUrl.includes('youtu.be')) {
-        type = 'video';
-        prompt = `Analyze the video at this URL: ${sourceUrl}. `;
-        tools = [{ googleSearch: {} }];
-      } else if (sourceUrl.includes('facebook.com') || sourceUrl.includes('twitter.com') || sourceUrl.includes('x.com')) {
-        type = 'social';
-        prompt = `Analyze the social media post at this URL: ${sourceUrl}. `;
-        tools = [{ googleSearch: {} }];
-      } else {
-        type = 'article';
-        prompt = `Analyze the article at this URL: ${sourceUrl}. `;
-        tools = [{ googleSearch: {} }];
-      }
-    } else {
-      type = 'text';
-      prompt = `Analyze the following text: "${sourceText}". `;
-    }
-
-    prompt += `
-Your task is to generate a highly professional script for a voice-over based on the provided source.
-Intention: ${intention}
-Tone: ${tone}
-Stance / Bias (Parti pris): ${stance}
-Target Duration: ${duration}
-
-CRITICAL INSTRUCTIONS FOR FORMATTING:
-1. DO NOT include conversational filler like "Voici un script...".
-2. DO NOT include meta-commentary about word count or duration.
-3. Start IMMEDIATELY with a brief 1-2 sentence explanation of how you adapted the subject to match the requested tone, intention, and stance.
-4. You MUST wrap the actual spoken voice-over script inside exactly <script_pro> and </script_pro> XML-like tags. This is mandatory for the application's teleprompter to extract the text seamlessly. DO NOT put headings, stage directions, or markdown inside the <script_pro> tags. ONLY the raw, readable, punctuated spoken text.
-5. Provide recording tips outside and after the tags.
-
-Example Structure:
-[Brief explanation of adaptation methods]
-
-<script_pro>
-Here is exactly what the presenter will read aloud, word for word. No markdown, no italic stage directions inside this block. Sentences should be easy to read out loud.
-</script_pro>
-
-**💡 Conseils pour l'enregistrement :**
-* [Tip 1: e.g., camera angle, lighting, attitude, pacing]
-* [Tip 2]
-
-Write all content in French. Make it sound natural and professional for a video creator.
-`;
-
-    try {
-      if (typeof GEMINI_API_KEY === 'undefined' || !GEMINI_API_KEY) {
-         throw new Error("Clé API Gemini non configurée.");
-      }
-      
-      const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
-      const responseStream = await ai.models.generateContentStream({
-        model: model,
-        contents: prompt,
-        config: {
-          tools: tools.length > 0 ? tools : undefined
+    return new Promise(async (resolve, reject) => {
+      try {
+        const user = this.authService.currentUser();
+        if (!user) {
+          throw new Error("Vous devez être connecté pour générer un script.");
         }
-      });
+        
+        const token = await user.getIdToken();
 
-      let fullText = '';
-      for await (const chunk of responseStream) {
-        if (chunk.text) {
-          fullText += chunk.text;
-          if (onProgress) {
-            onProgress(fullText);
+        const response = await fetch('/api/generate-script', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+             sourceUrl,
+             sourceText,
+             intention,
+             tone,
+             stance,
+             duration
+          })
+        });
+
+        if (!response.ok) {
+           let errorObj;
+           try {
+             errorObj = await response.json();
+           } catch (e) {
+             throw new Error("Erreur de connexion au serveur.");
+           }
+           throw new Error(errorObj.error || "Erreur HTTP " + response.status);
+        }
+
+        if (!response.body) {
+           throw new Error("Réponse vide du serveur.");
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let fullText = '';
+        let finalType: 'video' | 'article' | 'social' | 'text' = 'text';
+        let buffer = '';
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split('\n\n');
+          buffer = parts.pop() || ''; // Keep the last potentially incomplete chunk in the buffer
+          
+          for (const ev of parts) {
+            if (ev.startsWith('data: ')) {
+              try {
+                 const dataStr = ev.replace(/^data:\s*/, '');
+                 if (dataStr === '[DONE]') continue; // Standard ignore for end blocks
+                 
+                 const data = JSON.parse(dataStr);
+                 if (data.error) {
+                    throw new Error(data.error);
+                 }
+                 if (data.text) {
+                    fullText += data.text;
+                    if (onProgress) onProgress(fullText);
+                 }
+                 if (data.done) {
+                    finalType = data.type || 'text';
+                 }
+              } catch (e: unknown) {
+                 if (e instanceof Error && e.message !== "Unexpected end of JSON input") {
+                    throw e; // Rethrow actual backend errors, ignore silent incomplete chunks 
+                 }
+              }
+            }
           }
         }
+        resolve({ script: fullText, type: finalType });
+      } catch (error: any) {
+        reject(error);
       }
-
-      return { script: fullText, type };
-    } catch (error: any) {
-      console.error('Error generating script:', error);
-      let errMsg = "Erreur lors de la génération du contenu.";
-      if (error?.status === 429 || (error?.message && error.message.includes('429'))) {
-         errMsg = "Quota dépassé sur le service d'Intelligence Artificielle.";
-      } else if (error?.status === 400 || (error?.message && error.message.includes('400')) || (error?.message && error.message.includes('API key'))) {
-         errMsg = "Clé d'API invalide ou requête incorrecte.";
-      }
-      
-      throw new Error(errMsg);
-    }
+    });
   }
 }

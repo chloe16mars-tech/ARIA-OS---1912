@@ -2,7 +2,9 @@ import { Component, OnInit, OnDestroy, signal, inject, computed, ChangeDetection
 import { CommonModule } from '@angular/common';
 import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
-import { FirestoreService, AppNotification, UserProfile } from '../../services/firestore.service';
+import { StatsService } from '../../services/stats.service';
+import { NotificationService, AppNotification } from '../../services/notification.service';
+import { UserService, UserProfile } from '../../services/user.service';
 import { AuthService } from '../../services/auth.service';
 import { ToastComponent } from '../ui/toast/toast.component';
 
@@ -19,7 +21,7 @@ import { ToastComponent } from '../ui/toast/toast.component';
       <div class="fixed inset-0 pointer-events-none z-[-1] opacity-[0.03] bg-cakenews-pattern"></div>
 
       <!-- Global Fixed Header -->
-      <div class="fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-[#0A0A0C]/80 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-800/50">
+      <div class="fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-[#0A0A0C]/80 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-800/50" style="padding-top: var(--sat);">
         <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
           <div class="flex items-center gap-2">
             <h1 class="text-2xl font-black tracking-tight drop-shadow-sm flex items-center gap-1">
@@ -37,7 +39,7 @@ import { ToastComponent } from '../ui/toast/toast.component';
       </div>
 
       <!-- Main Content -->
-      <main class="flex-1 pt-20 pb-32 relative">
+      <main class="flex-1 pb-32 relative" style="padding-top: calc(80px + var(--sat));">
         <router-outlet></router-outlet>
       </main>
 
@@ -90,7 +92,9 @@ export class LayoutComponent implements OnInit, OnDestroy {
   private unsubNotifications?: () => void;
   private unsubProfile?: () => void;
   
-  private firestoreService = inject(FirestoreService);
+  private statsService = inject(StatsService);
+  private notificationService = inject(NotificationService);
+  private userService = inject(UserService);
   public authService = inject(AuthService);
 
   unreadCount = computed(() => {
@@ -105,15 +109,15 @@ export class LayoutComponent implements OnInit, OnDestroy {
   });
 
   ngOnInit() {
-    this.unsubscribeStats = this.firestoreService.getGlobalStatsSnapshot((total) => {
+    this.unsubscribeStats = this.statsService.getGlobalStatsSnapshot((total) => {
       this.totalGenerations.set(total);
     });
     
-    this.unsubNotifications = this.firestoreService.getNotificationsSnapshot((data) => {
+    this.unsubNotifications = this.notificationService.getNotificationsSnapshot((data) => {
       this.notifications.set(data);
     });
 
-    this.unsubProfile = this.firestoreService.getUserProfileSnapshot((data) => {
+    this.unsubProfile = this.userService.getUserProfileSnapshot((data) => {
       this.userProfile.set(data);
     });
   }
