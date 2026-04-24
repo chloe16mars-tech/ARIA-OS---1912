@@ -1,6 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { db, handleFirestoreError, OperationType } from '../../firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { supabase } from '../../supabase';
 import { AuthService } from './auth.service';
 
 @Injectable({
@@ -13,15 +12,33 @@ export class StatsService {
     const user = this.authService.currentUser();
     if (!user) return () => undefined;
 
-    const statsRef = doc(db, 'stats', 'global');
-    return onSnapshot(statsRef, (docSnap) => {
-      if (docSnap.exists()) {
-        callback(docSnap.data()['totalGenerations'] || 0);
-      } else {
-        callback(0);
-      }
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'stats/global');
-    });
+    // Supabase way: fetch count of all scripts
+    this.fetchCount(callback);
+
+    const channel = supabase
+      .channel('global-stats')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'scripts' },
+        () => {
+          this.fetchCount(callback);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }
+
+  private async fetchCount(callback: (total: number) => void) {
+    // Note: count(*) can be slow on very large tables, but fine for now
+    const { count, error } = await supabase
+      .from('scripts')
+      .select('*', { count: 'exact', head: true });
+
+    if (!error) {
+      callback(count || 0);
+    }
   }
 }

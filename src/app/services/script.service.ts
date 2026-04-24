@@ -1,23 +1,22 @@
 import { Injectable, inject } from '@angular/core';
-import { db, handleFirestoreError, OperationType } from '../../firebase';
-import { collection, doc, setDoc, query, where, onSnapshot, deleteDoc, Timestamp } from 'firebase/firestore';
+import { supabase } from '../../supabase';
 import { AuthService } from './auth.service';
 
 export interface ScriptData {
   id?: string;
-  userId: string;
-  sourceUrl?: string;
-  sourceText?: string;
-  sourceType: 'video' | 'article' | 'social' | 'text';
+  user_id: string;
+  source_url?: string;
+  source_text?: string;
+  source_type: 'video' | 'article' | 'social' | 'text';
   intention: string;
   tone: string;
   stance?: string;
   duration: string;
   content: string;
-  reflectionTime?: number;
-  createdAt: Timestamp;
-  isDeleted?: boolean;
-  deletedAt?: Timestamp;
+  created_at: string;
+  is_trashed?: boolean;
+  trashed_at?: string;
+  reflection_time?: number;
   title?: string;
   pinned?: boolean;
 }
@@ -28,106 +27,142 @@ export interface ScriptData {
 export class ScriptService {
   private authService = inject(AuthService);
 
-  async saveScript(script: Omit<ScriptData, 'id' | 'userId' | 'createdAt'>) {
+  async saveScript(script: Omit<ScriptData, 'id' | 'user_id' | 'created_at'>) {
     const user = this.authService.currentUser();
     if (!user) throw new Error('User not authenticated');
 
-    const scriptRef = doc(collection(db, 'scripts'));
-    const scriptData: ScriptData = {
-      ...script,
-      userId: user.uid,
-      createdAt: Timestamp.now(),
-      isDeleted: false
-    };
+    const { data, error } = await supabase
+      .from('scripts')
+      .insert({
+        ...script,
+        user_id: user.id,
+        created_at: new Date().toISOString(),
+        is_trashed: false
+      })
+      .select()
+      .single();
 
-    try {
-      await setDoc(scriptRef, scriptData);
-      return scriptRef.id;
-    } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'scripts');
+    if (error) {
+      console.error("Error saving script:", error);
       throw error;
     }
+    return data.id;
   }
 
   async updateScript(scriptId: string, partial: Partial<ScriptData>) {
-    try {
-      await setDoc(doc(db, 'scripts', scriptId), partial, { merge: true });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `scripts/${scriptId}`);
+    const { error } = await supabase
+      .from('scripts')
+      .update(partial)
+      .eq('id', scriptId);
+    
+    if (error) {
+      console.error("Error updating script:", error);
       throw error;
     }
   }
 
   async moveToTrash(scriptId: string) {
-    try {
-      await setDoc(doc(db, 'scripts', scriptId), {
-        isDeleted: true,
-        deletedAt: Timestamp.now()
-      }, { merge: true });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `scripts/${scriptId}`);
-      throw error;
+    const { error } = await supabase
+      .from('scripts')
+      .update({
+        is_trashed: true,
+        trashed_at: new Date().toISOString()
+      })
+      .eq('id', scriptId);
+
+    if (error) {
+       console.error("Error moving to trash:", error);
+       throw error;
     }
   }
 
   async restoreScript(scriptId: string) {
-    try {
-      await setDoc(doc(db, 'scripts', scriptId), {
-        isDeleted: false,
-        deletedAt: null
-      }, { merge: true });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `scripts/${scriptId}`);
-      throw error;
+    const { error } = await supabase
+      .from('scripts')
+      .update({
+        is_trashed: false,
+        trashed_at: null
+      })
+      .eq('id', scriptId);
+
+    if (error) {
+       console.error("Error restoring script:", error);
+       throw error;
     }
   }
 
   async deleteScript(scriptId: string) {
-    try {
-      await deleteDoc(doc(db, 'scripts', scriptId));
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `scripts/${scriptId}`);
-      throw error;
+    const { error } = await supabase
+      .from('scripts')
+      .delete()
+      .eq('id', scriptId);
+
+    if (error) {
+       console.error("Error deleting script:", error);
+       throw error;
     }
   }
 
-  // OPTIMIZED: Native Firebase filtering instead of client-side JS filtering
   getScriptsSnapshot(callback: (scripts: ScriptData[]) => void) {
     const user = this.authService.currentUser();
     if (!user) return () => undefined;
 
-    const q = query(
-      collection(db, 'scripts'),
-      where('userId', '==', user.uid),
-      where('isDeleted', '==', false) // Use index/filter directly in query
-    );
+    // Initial fetch
+    this.fetchScripts(user.id, false, callback);
 
-    return onSnapshot(q, (snapshot) => {
-      const scripts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ScriptData));
-      scripts.sort((a, b) => b.createdAt?.toMillis() - a.createdAt?.toMillis());
-      callback(scripts);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'scripts');
-    });
+    // Subscribe
+    const channel = supabase
+      .channel(`scripts-user-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'scripts', filter: `user_id=eq.${user.id}` },
+        () => {
+          this.fetchScripts(user.id!, false, callback);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }
 
-  // OPTIMIZED: Native Firebase filtering
+  private async fetchScripts(userId: string, trashed: boolean, callback: (scripts: ScriptData[]) => void) {
+    const { data, error } = await supabase
+      .from('scripts')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('is_trashed', trashed)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error("Error fetching scripts:", error);
+    } else {
+      callback(data as ScriptData[]);
+    }
+  }
+
   getTrashedScriptsSnapshot(callback: (scripts: ScriptData[]) => void) {
     const user = this.authService.currentUser();
     if (!user) return () => undefined;
 
-    const q = query(
-      collection(db, 'scripts'),
-      where('userId', '==', user.uid),
-      where('isDeleted', '==', true) 
-    );
+    // Initial fetch
+    this.fetchScripts(user.id, true, callback);
 
-    return onSnapshot(q, (snapshot) => {
-      const scripts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ScriptData));
-      scripts.sort((a, b) => (b.deletedAt?.toMillis() || 0) - (a.deletedAt?.toMillis() || 0));
-      callback(scripts);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'scripts');
-    });
+    // Subscribe
+    const channel = supabase
+      .channel(`trashed-scripts-user-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'scripts', filter: `user_id=eq.${user.id}` },
+        () => {
+          this.fetchScripts(user.id!, true, callback);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }
 }

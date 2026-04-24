@@ -7,7 +7,6 @@ import {
 import express from 'express';
 import {join} from 'node:path';
 import 'dotenv/config';
-import { GoogleGenAI } from '@google/genai';
 import { apiRouter } from './server/api.router.js';
 
 const browserDistFolder = join(import.meta.dirname, '../browser');

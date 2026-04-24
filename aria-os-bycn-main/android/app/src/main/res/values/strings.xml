@@ -1,7 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<resources>
-    <string name="app_name">Studio Creator</string>
-    <string name="title_activity_main">Studio Creator</string>
-    <string name="package_name">com.creator.studio</string>
-    <string name="custom_url_scheme">com.creator.studio</string>
-</resources>

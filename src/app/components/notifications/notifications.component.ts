@@ -1,6 +1,8 @@
 import { Component, OnInit, OnDestroy, signal, inject, computed } from '@angular/core';
 import { NotificationService, AppNotification } from '../../services/notification.service';
 import { UserService, UserProfile } from '../../services/user.service';
+import { LanguageService } from '../../services/language.service';
+import { TranslatePipe } from '../../pipes/translate.pipe';
 import { MatIconModule } from '@angular/material/icon';
 import { DatePipe } from '@angular/common';
 import { Router } from '@angular/router';
@@ -8,12 +10,12 @@ import { Router } from '@angular/router';
 @Component({
   selector: 'app-notifications',
   standalone: true,
-  imports: [MatIconModule, DatePipe],
+  imports: [MatIconModule, DatePipe, TranslatePipe],
   template: `
     <div class="p-4 max-w-3xl mx-auto space-y-6 pb-24">
       <div class="space-y-1 px-2">
-        <h2 class="text-2xl font-semibold tracking-tight">Notifications</h2>
-        <p class="text-base text-gray-500 dark:text-gray-400">Restez informé des mises à jour.</p>
+        <h2 class="text-2xl font-semibold tracking-tight">{{ 'notif.title' | translate }}</h2>
+        <p class="text-base text-gray-500 dark:text-gray-400">{{ 'notif.desc' | translate }}</p>
       </div>
       
       @if (visibleNotifications().length === 0) {
@@ -21,8 +23,8 @@ import { Router } from '@angular/router';
           <div class="w-20 h-20 bg-gray-100 dark:bg-[#1C1C1E] rounded-full flex items-center justify-center mb-6">
             <mat-icon class="text-gray-400 text-4xl w-10 h-10">notifications_none</mat-icon>
           </div>
-          <h3 class="text-xl font-semibold mb-2">Aucune notification</h3>
-          <p class="text-gray-500 dark:text-gray-400 max-w-xs mx-auto">Vous êtes à jour ! Les nouvelles annonces apparaîtront ici.</p>
+          <h3 class="text-xl font-semibold mb-2">{{ 'notif.empty' | translate }}</h3>
+          <p class="text-gray-500 dark:text-gray-400 max-w-xs mx-auto">{{ 'notif.emptyDesc' | translate }}</p>
         </div>
       } @else {
         <div class="space-y-4">
@@ -55,18 +57,18 @@ import { Router } from '@angular/router';
                 <div class="flex-1 min-w-0">
                   <div class="flex justify-between items-start gap-2 mb-1">
                     <h3 class="font-bold text-base truncate" [class.text-gray-900]="!isRead(notif.id!)" [class.dark:text-white]="!isRead(notif.id!)">{{ notif.title }}</h3>
-                    <span class="text-xs text-gray-400 whitespace-nowrap shrink-0">{{ notif.createdAt.toDate() | date:'dd MMM yyyy' }}</span>
+                    <span class="text-xs text-gray-400 whitespace-nowrap shrink-0">{{ notif.created_at | date:'dd MMM yyyy' }}</span>
                   </div>
                   <p class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed mb-4">{{ notif.message }}</p>
                   
                   <div class="flex gap-2">
                     @if (!isRead(notif.id!)) {
                       <button (click)="markAsRead(notif.id!)" class="text-xs font-medium px-3 py-1.5 bg-gray-100 dark:bg-[#2C2C2E] hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                        Marquer comme lu
+                        {{ 'notif.actions.markAsRead' | translate }}
                       </button>
                     }
                     <button (click)="deleteNotification(notif.id!)" class="text-xs font-medium px-3 py-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
-                      Supprimer
+                      {{ 'notif.actions.delete' | translate }}
                     </button>
                   </div>
                 </div>
@@ -81,6 +83,7 @@ import { Router } from '@angular/router';
 export class NotificationsComponent implements OnInit, OnDestroy {
   private notificationService = inject(NotificationService);
   private userService = inject(UserService);
+  private languageService = inject(LanguageService);
   private router = inject(Router);
 
   notifications = signal<AppNotification[]>([]);
@@ -91,7 +94,7 @@ export class NotificationsComponent implements OnInit, OnDestroy {
   private unsubProfile?: () => void;
 
   visibleNotifications = computed(() => {
-    const deleted = this.userProfile()?.deletedNotifications || [];
+    const deleted = this.userProfile()?.deleted_notifications || [];
     return this.notifications().filter(n => !deleted.includes(n.id!));
   });
 
@@ -119,7 +122,7 @@ export class NotificationsComponent implements OnInit, OnDestroy {
   }
 
   isRead(id: string): boolean {
-    return this.userProfile()?.readNotifications?.includes(id) || false;
+    return this.userProfile()?.read_notifications?.includes(id) || false;
   }
 
   getIcon(type: string): string {
@@ -135,7 +138,7 @@ export class NotificationsComponent implements OnInit, OnDestroy {
   }
 
   async deleteNotification(id: string) {
-    if (confirm('Voulez-vous vraiment supprimer cette notification ?')) {
+    if (confirm(this.languageService.translate('notif.actions.deleteConfirm'))) {
       await this.notificationService.deleteNotification(id);
     }
   }

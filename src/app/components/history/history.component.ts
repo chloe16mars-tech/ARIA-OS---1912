@@ -7,18 +7,21 @@ import { FormsModule } from '@angular/forms';
 import { ScriptFormatPipe } from '../../pipes/script-format.pipe';
 import { SourceViewerComponent } from '../source-viewer/source-viewer.component';
 import { ToastService } from '../../services/toast.service';
+import { TranslatePipe } from '../../pipes/translate.pipe';
+import { LanguageService } from '../../services/language.service';
 
 @Component({
   selector: 'app-history',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatIconModule, DatePipe, ScriptFormatPipe, SourceViewerComponent, FormsModule],
+  imports: [MatIconModule, DatePipe, ScriptFormatPipe, SourceViewerComponent, FormsModule, TranslatePipe],
   templateUrl: './history.component.html'
 })
 export class HistoryComponent implements OnInit, OnDestroy {
   private scriptService = inject(ScriptService);
   private router = inject(Router);
   private toastService = inject(ToastService);
+  public languageService = inject(LanguageService);
 
   activeScripts = signal<ScriptData[]>([]);
   trashedScripts = signal<ScriptData[]>([]);
@@ -45,8 +48,8 @@ export class HistoryComponent implements OnInit, OnDestroy {
       if (a.pinned && !b.pinned) return -1;
       if (!a.pinned && b.pinned) return 1;
 
-      const timeA = a.createdAt?.toMillis() || 0;
-      const timeB = b.createdAt?.toMillis() || 0;
+      const timeA = new Date(a.created_at).getTime() || 0;
+      const timeB = new Date(b.created_at).getTime() || 0;
       const titleA = (a.title || a.intention + ' ' + a.tone).toLowerCase();
       const titleB = (b.title || b.intention + ' ' + b.tone).toLowerCase();
 

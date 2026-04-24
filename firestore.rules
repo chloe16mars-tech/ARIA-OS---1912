@@ -78,16 +78,16 @@ service cloud.firestore {
       let data = request.resource.data;
       return hasRequiredFields(['createdAt']) &&
              data.createdAt is timestamp &&
-             (!('email' in data) || data.email == null || data.email is string) &&
-             (!('displayName' in data) || data.displayName == null || data.displayName is string) &&
-             (!('photoURL' in data) || data.photoURL == null || data.photoURL is string) &&
-             (!('generationCount' in data) || data.generationCount is number) &&
-             (!('anonymousGenerationCount' in data) || data.anonymousGenerationCount is number) &&
-             (!('lastGenerationDate' in data) || data.lastGenerationDate is timestamp || data.lastGenerationDate == null) &&
-             (!('scheduledDeletionDate' in data) || data.scheduledDeletionDate is timestamp || data.scheduledDeletionDate == null) &&
-             (!('deletedNotifications' in data) || data.deletedNotifications is list) &&
-             (!('readNotifications' in data) || data.readNotifications is list) &&
-             (!('preferences' in data) || data.preferences is map);
+             (data.get('email', '') is string || data.get('email', null) == null) &&
+             (data.get('displayName', '') is string || data.get('displayName', null) == null) &&
+             (data.get('photoURL', '') is string || data.get('photoURL', null) == null) &&
+             (data.get('generationCount', 0) is number) &&
+             (data.get('anonymousGenerationCount', 0) is number) &&
+             (data.get('lastGenerationDate', request.time) is timestamp) &&
+             (data.get('scheduledDeletionDate', request.time) is timestamp) &&
+             (data.get('deletedNotifications', []) is list) &&
+             (data.get('readNotifications', []) is list) &&
+             (data.get('preferences', {}) is map);
     }
 
     function isValidScript() {
@@ -109,6 +109,16 @@ service cloud.firestore {
              (!('pinned' in request.resource.data) || request.resource.data.pinned is bool);
     }
 
+    function isValidVideo() {
+      let data = request.resource.data;
+      return hasRequiredFields(['userId', 'createdAt']) &&
+             data.userId == request.auth.uid &&
+             data.createdAt is timestamp &&
+             (!('title' in data) || isValidStringLength('title', 1, 200)) &&
+             (!('status' in data) || data.status in ['pending', 'processing', 'completed', 'failed']) &&
+             (!('url' in data) || data.url is string);
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
@@ -127,6 +137,16 @@ service cloud.firestore {
                     request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if isDocOwner();
     }
+
+    match /videos/{videoId} {
+      allow read: if isDocOwner();
+      allow create: if isAuthenticated() && isValidVideo();
+      allow update: if isDocOwner() && isValidVideo() && 
+                    request.resource.data.userId == resource.data.userId &&
+                    request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isDocOwner();
+    }
+
     match /stats/{statId} {
       allow read: if isAuthenticated();
       allow write: if false; // Only backend admin SDK can write here now

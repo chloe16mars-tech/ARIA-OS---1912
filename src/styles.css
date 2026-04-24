@@ -69,40 +69,41 @@
   background-image: url("data:image/svg+xml,%3Csvg width='150' height='150' xmlns='http://www.w3.org/2000/svg'%3E%3Ctext x='20' y='30' font-family='sans-serif' font-size='12' font-weight='bold' fill='%23ffffff' transform='rotate(30 20 30)'%3EC4kenews%3C/text%3E%3Ctext x='90' y='70' font-family='sans-serif' font-size='12' font-weight='bold' fill='%23ffffff' transform='rotate(-45 90 70)'%3EC4kenews%3C/text%3E%3Ctext x='30' y='110' font-family='sans-serif' font-size='12' font-weight='bold' fill='%23ffffff' transform='rotate(15 30 110)'%3EC4kenews%3C/text%3E%3Ctext x='110' y='130' font-family='sans-serif' font-size='12' font-weight='bold' fill='%23ffffff' transform='rotate(-60 110 130)'%3EC4kenews%3C/text%3E%3C/svg%3E");
 }
 
-/* Disable all transitions globally */
-* {
-  transition: none !important;
-  animation-duration: 0s !important;
+/* Aria OS Premium Animations */
+@keyframes aria-breathe {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 2px currentColor); }
+  50% { transform: scale(1.1); filter: drop-shadow(0 0 8px currentColor); }
+}
+.aria-breathe-anim {
+  animation: aria-breathe 2s ease-in-out infinite alternate !important;
+  animation-duration: 2s !important;
 }
 
-/* Re-enable specific animations that are required */
-.animate-scroll {
-  animation-duration: 30s !important;
+@keyframes aria-reveal {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
-.gabon-fluid-text {
-  animation-duration: 2s !important;
+.aria-reveal {
+  animation: aria-reveal 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+  animation-duration: 0.4s !important;
+}
+
+@keyframes aria-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 .animate-spin {
+  animation: aria-spin 1s linear infinite !important;
   animation-duration: 1s !important;
 }
-.animate-pulse {
-  animation-duration: 2s !important;
-}
-.animate-fade-in {
-  animation-duration: 0.2s !important;
-}
-.transition-colors {
-  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke !important;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important;
-  transition-duration: 150ms !important;
+
+/* Base styles for smooth transitions */
+.transition-all {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .transition-transform {
-  transition-property: transform !important;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important;
-  transition-duration: 150ms !important;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.transition-all {
-  transition-property: all !important;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important;
-  transition-duration: 300ms !important;
+.transition-opacity {
+  transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
