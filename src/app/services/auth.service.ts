@@ -1,83 +1,73 @@
 import { Injectable, signal } from '@angular/core';
-import { auth, db } from '../../firebase';
-import { GoogleAuthProvider, signInWithPopup, signInWithCredential, signOut, User, onAuthStateChanged, signInAnonymously } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { supabase } from '../../supabase';
+import { User, Session } from '@supabase/supabase-js';
 import { Capacitor } from '@capacitor/core';
-import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
+import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 
 @Injectable({
   providedIn: 'root'
 })
 export class AuthService {
   currentUser = signal<User | null>(null);
+  currentSession = signal<Session | null>(null);
   isAuthReady = signal<boolean>(false);
 
   isAnonymous(): boolean {
-    return this.currentUser()?.isAnonymous ?? false;
+    return this.currentUser()?.is_anonymous ?? false;
   }
 
   constructor() {
-    onAuthStateChanged(auth, (user) => {
-      this.currentUser.set(user);
+    // Initialize Capacitor Google Auth plugin if native
+    if (Capacitor.isNativePlatform()) {
+      GoogleAuth.initialize();
+    }
+
+    // Initial session fetch
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      this.currentSession.set(session);
+      this.currentUser.set(session?.user || null);
       this.isAuthReady.set(true);
-      if (user) {
-        this.ensureUserDocument(user).catch(console.error);
-      }
+    });
+
+    // Listen for auth changes
+    supabase.auth.onAuthStateChange((_event, session) => {
+      this.currentSession.set(session);
+      this.currentUser.set(session?.user || null);
+      this.isAuthReady.set(true);
     });
   }
 
   waitForAuthReady(): Promise<void> {
     if (this.isAuthReady()) return Promise.resolve();
     return new Promise((resolve) => {
-      const unsubscribe = onAuthStateChanged(auth, () => {
-        unsubscribe();
+      const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+        this.currentSession.set(session);
+        this.currentUser.set(session?.user || null);
         this.isAuthReady.set(true);
+        authListener.subscription.unsubscribe();
         resolve();
       });
     });
   }
 
-  private async ensureUserDocument(user: User) {
-    if (!user || user.isAnonymous) return;
-    
-    const userRef = doc(db, 'users', user.uid);
-    try {
-      const docSnap = await getDoc(userRef);
-      if (!docSnap.exists()) {
-        try {
-          await setDoc(userRef, {
-            email: user.email || null,
-            displayName: user.displayName || null,
-            photoURL: user.photoURL || null,
-            createdAt: serverTimestamp(),
-            generationCount: 0
-          });
-        } catch (setErr) {
-          console.error("Error creating user document (setDoc permissions might be missing): ", setErr);
-        }
-      }
-    } catch (error) {
-      console.error("Error checking user document (getDoc permissions might be missing): ", error);
-      // We don't throw here to avoid completely breaking the login flow
-    }
-  }
-
   async loginWithGoogle() {
     try {
       if (Capacitor.isNativePlatform()) {
-        const result = await FirebaseAuthentication.signInWithGoogle();
-        const credential = GoogleAuthProvider.credential(
-          result.credential?.idToken,
-          result.credential?.accessToken
-        );
-        const userCredential = await signInWithCredential(auth, credential);
-        this.currentUser.set(userCredential.user);
-        this.ensureUserDocument(userCredential.user).catch(console.error);
+        const googleUser = await GoogleAuth.signIn();
+        const idToken = googleUser.authentication.idToken;
+        if (!idToken) throw new Error('No ID token found from Google Auth');
+        
+        const { error } = await supabase.auth.signInWithIdToken({
+          provider: 'google',
+          token: idToken,
+        });
+        
+        if (error) throw error;
       } else {
-        const provider = new GoogleAuthProvider();
-        const credential = await signInWithPopup(auth, provider);
-        this.currentUser.set(credential.user);
-        this.ensureUserDocument(credential.user).catch(console.error);
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+        });
+        if (error) throw error;
       }
     } catch (error) {
       console.error('Login failed', error);
@@ -87,8 +77,8 @@ export class AuthService {
 
   async loginAnonymously() {
     try {
-      const credential = await signInAnonymously(auth);
-      this.currentUser.set(credential.user);
+      const { data, error } = await supabase.auth.signInAnonymously();
+      if (error) throw error;
     } catch (error) {
       console.error('Anonymous login failed', error);
       throw error;
@@ -97,10 +87,19 @@ export class AuthService {
 
   async logout() {
     try {
-      await signOut(auth);
+      if (Capacitor.isNativePlatform()) {
+        await GoogleAuth.signOut().catch(() => {});
+      }
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
     } catch (error) {
       console.error('Logout failed', error);
       throw error;
     }
+  }
+
+  async getIdToken(): Promise<string | undefined> {
+    const session = await supabase.auth.getSession();
+    return session.data.session?.access_token;
   }
 }

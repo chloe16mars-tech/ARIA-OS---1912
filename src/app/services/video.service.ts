@@ -64,7 +64,7 @@ export class VideoService {
       scriptContent,
       isDeleted: false,
       mediaType,
-      userId: user ? user.uid : undefined,
+      userId: user ? user.id : undefined,
       pinned: false
     };
 
@@ -94,7 +94,7 @@ export class VideoService {
         }
 
         const user = this.authService.currentUser();
-        const currentUserId = user ? user.uid : undefined;
+        const currentUserId = user ? user.id : undefined;
         if (video.userId && video.userId !== currentUserId) {
           reject(new Error('Unauthorized'));
           return;
@@ -131,7 +131,7 @@ export class VideoService {
 
       request.onsuccess = () => {
         const user = this.authService.currentUser();
-        const currentUserId = user ? user.uid : undefined;
+        const currentUserId = user ? user.id : undefined;
         let allVideos = request.result as SavedVideo[];
         
         // Filter videos by user identity. Keep legacy (no userId) videos visible to avoid data loss initially.
@@ -167,7 +167,7 @@ export class VideoService {
         const video = request.result as SavedVideo;
         if (video) {
           const user = this.authService.currentUser();
-          const currentUserId = user ? user.uid : undefined;
+          const currentUserId = user ? user.id : undefined;
           
           if (video.userId && video.userId !== currentUserId) {
             resolve(null);
@@ -198,7 +198,7 @@ export class VideoService {
         const video = getRequest.result as SavedVideo;
         if (video) {
           const user = this.authService.currentUser();
-          const currentUserId = user ? user.uid : undefined;
+          const currentUserId = user ? user.id : undefined;
           if (video.userId && video.userId !== currentUserId) {
             reject(new Error('Unauthorized'));
             return;
@@ -229,7 +229,7 @@ export class VideoService {
         const video = getRequest.result as SavedVideo;
         if (video) {
           const user = this.authService.currentUser();
-          const currentUserId = user ? user.uid : undefined;
+          const currentUserId = user ? user.id : undefined;
           if (video.userId && video.userId !== currentUserId) {
             reject(new Error('Unauthorized'));
             return;
@@ -260,7 +260,7 @@ export class VideoService {
         const video = getRequest.result as SavedVideo;
         if (video) {
           const user = this.authService.currentUser();
-          const currentUserId = user ? user.uid : undefined;
+          const currentUserId = user ? user.id : undefined;
           if (video.userId && video.userId !== currentUserId) {
             reject(new Error('Unauthorized'));
             return;
@@ -287,7 +287,7 @@ export class VideoService {
 
       request.onsuccess = () => {
         const user = this.authService.currentUser();
-        const currentUserId = user ? user.uid : undefined;
+        const currentUserId = user ? user.id : undefined;
         let videos = request.result as SavedVideo[];
         
         if (currentUserId) {

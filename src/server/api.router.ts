@@ -1,21 +1,23 @@
 import { Router } from 'express';
-import { getAuth } from 'firebase-admin/auth';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
-import { initializeApp, getApps, applicationDefault } from 'firebase-admin/app';
+import { createClient } from '@supabase/supabase-js';
 import { GoogleGenAI } from '@google/genai';
 
-// Initialize Firebase Admin safely
-if (!getApps().length) {
-  try {
-    initializeApp({
-        credential: applicationDefault()
-    });
-  } catch (error) {
-    console.warn("Firebase Admin SDK init failed. Certain backend routes like account deletion will not work locally without ADC credentials.", error);
-  }
+export const apiRouter = Router();
+
+// Initialize Supabase Admin client
+const supabaseUrl = process.env['SUPABASE_URL'];
+const supabaseServiceKey = process.env['SUPABASE_SERVICE_ROLE_KEY'];
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.warn("Supabase Admin SDK init failed. Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment.");
 }
 
-export const apiRouter = Router();
+const supabaseAdmin = createClient(supabaseUrl || '', supabaseServiceKey || '', {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false
+  }
+});
 
 apiRouter.post('/generate-script', async (req, res): Promise<any> => {
   try {
@@ -24,34 +26,37 @@ apiRouter.post('/generate-script', async (req, res): Promise<any> => {
       return res.status(401).json({ error: 'Unauthorized: Missing or invalid token' });
     }
 
-    const idToken = authHeader.split('Bearer ')[1];
-    let decodedToken;
-    try {
-      decodedToken = await getAuth().verifyIdToken(idToken);
-    } catch (err) {
+    const jwt = authHeader.split('Bearer ')[1];
+    
+    // Verify user JWT with Supabase Admin
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(jwt);
+    if (authError || !user) {
       return res.status(401).json({ error: 'Unauthorized: Token verification failed' });
     }
 
-    const uid = decodedToken.uid;
-    const isAnonymous = decodedToken.firebase?.sign_in_provider === 'anonymous';
+    const uid = user.id;
+    const isAnonymous = user.is_anonymous;
 
-    const db = getFirestore();
-    const userRef = db.collection('users').doc(uid);
-    const globalStatsRef = db.collection('stats').doc('global');
-
-    // Quota Logic
+    // Quota Logic with Supabase
     if (isAnonymous) {
-      const userDoc = await userRef.get();
-      const data = userDoc.data() || {};
-      const lastGen = data['lastGenerationDate'] ? data['lastGenerationDate'].toDate() : null;
-      const count = data['anonymousGenerationCount'] || 0;
+      const { data: userData, error: userError } = await supabaseAdmin
+        .from('users')
+        .select('anonymous_generation_count, last_generation_date')
+        .eq('id', uid)
+        .single();
+        
+      if (!userError && userData) {
+        const lastGenDateStr = userData.last_generation_date;
+        const count = userData.anonymous_generation_count || 0;
 
-      if (lastGen) {
-        const now = new Date();
-        const diffHours = (now.getTime() - lastGen.getTime()) / (1000 * 60 * 60);
+        if (lastGenDateStr) {
+          const lastGen = new Date(lastGenDateStr);
+          const now = new Date();
+          const diffHours = (now.getTime() - lastGen.getTime()) / (1000 * 60 * 60);
 
-        if (diffHours < 24 && count >= 2) {
-          return res.status(429).json({ error: 'Quota dépassé. Limite atteinte pour les comptes anonymes.' });
+          if (diffHours < 24 && count >= 2) {
+            return res.status(429).json({ error: 'Quota dépassé. Limite atteinte pour les comptes anonymes.' });
+          }
         }
       }
     }
@@ -105,7 +110,6 @@ Write all content in French. Make it sound natural and professional for a video 
 
     const ai = new GoogleGenAI({ apiKey: process.env['GEMINI_API_KEY'] });
     
-    // Server-sent events for streaming
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
@@ -128,38 +132,60 @@ Write all content in French. Make it sound natural and professional for a video 
     
     // Update Quotas & Stats Securely AFTER successful generation
     try {
-      await db.runTransaction(async (t) => {
-        // Global
-        t.set(globalStatsRef, { totalGenerations: FieldValue.increment(1) }, { merge: true });
+      // 1. Update Global Stats (using RPC if possible, otherwise read/write)
+      const { data: globalData } = await supabaseAdmin
+        .from('global_stats')
+        .select('total_generations')
+        .eq('id', 1)
+        .single();
         
-        // User
-        const userDoc = await t.get(userRef);
-        if (isAnonymous) {
-           const data = userDoc.data() || {};
-           const lastGen = data['lastGenerationDate'] ? data['lastGenerationDate'].toDate() : null;
-           const existingCount = data['anonymousGenerationCount'] || 0;
-           let countToSet = 1;
+      if (globalData) {
+         await supabaseAdmin
+           .from('global_stats')
+           .update({ total_generations: (globalData.total_generations || 0) + 1 })
+           .eq('id', 1);
+      }
 
-           if (lastGen) {
-             const now = new Date();
-             const diffHours = (now.getTime() - lastGen.getTime()) / (1000 * 60 * 60);
-             if (diffHours < 24) {
-               countToSet = existingCount + 1;
-             }
-           }
-           t.set(userRef, {
-             anonymousGenerationCount: countToSet,
-             lastGenerationDate: FieldValue.serverTimestamp()
-           }, { merge: true });
+      // 2. Update User Stats
+      const { data: userData } = await supabaseAdmin
+        .from('users')
+        .select('anonymous_generation_count, generation_count, last_generation_date')
+        .eq('id', uid)
+        .single();
+
+      if (userData) {
+        if (isAnonymous) {
+          const lastGenDateStr = userData.last_generation_date;
+          const existingCount = userData.anonymous_generation_count || 0;
+          let countToSet = 1;
+
+          if (lastGenDateStr) {
+            const lastGen = new Date(lastGenDateStr);
+            const now = new Date();
+            const diffHours = (now.getTime() - lastGen.getTime()) / (1000 * 60 * 60);
+            if (diffHours < 24) {
+              countToSet = existingCount + 1;
+            }
+          }
+          await supabaseAdmin
+            .from('users')
+            .update({ 
+              anonymous_generation_count: countToSet,
+              last_generation_date: new Date().toISOString()
+            })
+            .eq('id', uid);
         } else {
-           t.set(userRef, {
-             generationCount: FieldValue.increment(1)
-           }, { merge: true });
+          await supabaseAdmin
+            .from('users')
+            .update({ 
+              generation_count: (userData.generation_count || 0) + 1,
+              last_generation_date: new Date().toISOString()
+            })
+            .eq('id', uid);
         }
-      });
+      }
     } catch (e) {
       console.error("Failed to update stats transaction", e);
-      // We don't fail the request since generation succeeded
     }
 
     res.write(`data: ${JSON.stringify({ done: true, type })}\n\n`);
@@ -189,36 +215,22 @@ apiRouter.delete('/user/account', async (req, res): Promise<any> => {
           return res.status(401).json({ error: 'Unauthorized: Missing or invalid token' });
       }
 
-      const idToken = authHeader.split('Bearer ')[1];
-      const decodedToken = await getAuth().verifyIdToken(idToken);
-      const uid = decodedToken.uid;
-
-      const db = getFirestore();
-
-      // 1. Delete all scripts efficiently using Batches
-      const scriptsRef = db.collection('scripts');
-      const snapshot = await scriptsRef.where('userId', '==', uid).get();
-
-      let batch = db.batch();
-      let count = 0;
-      for (const doc of snapshot.docs) {
-          batch.delete(doc.ref);
-          count++;
-          if (count === 490) { // Keep under 500 operation limit
-              await batch.commit();
-              batch = db.batch();
-              count = 0;
-          }
+      const jwt = authHeader.split('Bearer ')[1];
+      const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(jwt);
+      
+      if (authError || !user) {
+         return res.status(401).json({ error: 'Unauthorized: Token verification failed' });
       }
-      if (count > 0) {
-          await batch.commit();
+      
+      const uid = user.id;
+
+      // Note: Because of PostgreSQL ON DELETE CASCADE on public.users and public.scripts,
+      // deleting the user from auth.users will automatically cascade and delete everything!
+      const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(uid);
+      
+      if (deleteError) {
+         throw deleteError;
       }
-
-      // 2. Delete user profile
-      await db.collection('users').doc(uid).delete();
-
-      // 3. Delete auth account
-      await getAuth().deleteUser(uid);
 
       res.json({ success: true });
   } catch (error) {

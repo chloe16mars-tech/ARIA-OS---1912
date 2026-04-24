@@ -24,7 +24,8 @@ export class GeminiService {
           throw new Error("Vous devez être connecté pour générer un script.");
         }
         
-        const token = await user.getIdToken();
+        const token = await this.authService.getIdToken();
+        if (!token) throw new Error("Impossible d'obtenir le jeton d'authentification.");
 
         const response = await fetch('/api/generate-script', {
           method: 'POST',

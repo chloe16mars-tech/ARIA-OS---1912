@@ -1,6 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { db, handleFirestoreError, OperationType } from '../../firebase';
-import { doc, setDoc, deleteDoc, getDocs, query, collection, where, onSnapshot, Timestamp } from 'firebase/firestore';
+import { supabase, handleSupabaseError, OperationType } from '../../supabase';
 import { AuthService } from './auth.service';
 
 export interface UserPreferences {
@@ -14,13 +13,11 @@ export interface UserProfile {
   email?: string;
   displayName?: string;
   photoURL?: string;
-  createdAt: Timestamp;
+  createdAt: Date;
   generationCount?: number;
   anonymousGenerationCount?: number;
-  lastGenerationDate?: Timestamp;
-  scheduledDeletionDate?: Timestamp;
-  deletedNotifications?: string[];
-  readNotifications?: string[];
+  lastGenerationDate?: Date;
+  scheduledDeletionDate?: Date;
   preferences?: UserPreferences;
 }
 
@@ -30,30 +27,64 @@ export interface UserProfile {
 export class UserService {
   private authService = inject(AuthService);
 
+  private mapFromDb(row: any): UserProfile {
+    return {
+      email: row.email,
+      displayName: row.display_name,
+      photoURL: row.photo_url,
+      createdAt: new Date(row.created_at),
+      generationCount: row.generation_count,
+      anonymousGenerationCount: row.anonymous_generation_count,
+      lastGenerationDate: row.last_generation_date ? new Date(row.last_generation_date) : undefined,
+      scheduledDeletionDate: row.scheduled_deletion_date ? new Date(row.scheduled_deletion_date) : undefined,
+      preferences: row.preferences
+    };
+  }
+
   getUserProfileSnapshot(callback: (data: UserProfile | null) => void) {
     const user = this.authService.currentUser();
     if (!user) return () => undefined;
 
-    const userRef = doc(db, 'users', user.uid);
-    return onSnapshot(userRef, (docSnap) => {
-      if (docSnap.exists()) {
-        callback(docSnap.data() as UserProfile);
-      } else {
+    const fetchProfile = async () => {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (error) {
+        // If row doesn't exist yet (before trigger), ignore or log
+        if (error.code !== 'PGRST116') {
+          handleSupabaseError(error, OperationType.GET, `users/${user.id}`);
+        }
         callback(null);
+      } else if (data) {
+        callback(this.mapFromDb(data));
       }
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, `users/${user.uid}`);
-    });
+    };
+
+    fetchProfile();
+
+    const channel = supabase.channel('public:users:profile')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'users', filter: `id=eq.${user.id}` }, payload => {
+        fetchProfile();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }
 
   async saveUserPreferences(preferences: UserPreferences) {
     const user = this.authService.currentUser();
-    if (!user || user.isAnonymous) return;
-    const userRef = doc(db, 'users', user.uid);
-    try {
-      await setDoc(userRef, { preferences }, { merge: true });
-    } catch (error: unknown) {
-      handleFirestoreError(error, OperationType.UPDATE, 'users');
+    if (!user || user.is_anonymous) return;
+    
+    const { error } = await supabase
+      .from('users')
+      .update({ preferences })
+      .eq('id', user.id);
+
+    if (error) {
+      handleSupabaseError(error, OperationType.UPDATE, 'users');
     }
   }
 
@@ -64,13 +95,13 @@ export class UserService {
     const deletionDate = new Date();
     deletionDate.setDate(deletionDate.getDate() + 3); // +3 days
     
-    const userRef = doc(db, 'users', user.uid);
-    try {
-      await setDoc(userRef, {
-        scheduledDeletionDate: Timestamp.fromDate(deletionDate)
-      }, { merge: true });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `users/${user.uid}`);
+    const { error } = await supabase
+      .from('users')
+      .update({ scheduled_deletion_date: deletionDate.toISOString() })
+      .eq('id', user.id);
+
+    if (error) {
+      handleSupabaseError(error, OperationType.UPDATE, `users/${user.id}`);
     }
   }
 
@@ -78,13 +109,13 @@ export class UserService {
     const user = this.authService.currentUser();
     if (!user) return;
     
-    const userRef = doc(db, 'users', user.uid);
-    try {
-      await setDoc(userRef, {
-        scheduledDeletionDate: null
-      }, { merge: true });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `users/${user.uid}`);
+    const { error } = await supabase
+      .from('users')
+      .update({ scheduled_deletion_date: null })
+      .eq('id', user.id);
+
+    if (error) {
+      handleSupabaseError(error, OperationType.UPDATE, `users/${user.id}`);
     }
   }
 
@@ -93,7 +124,11 @@ export class UserService {
     if (!user) return;
 
     try {
-      const token = await user.getIdToken();
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      
+      if (!token) throw new Error("No access token available");
+
       const response = await fetch('/api/user/account', {
           method: 'DELETE',
           headers: {
