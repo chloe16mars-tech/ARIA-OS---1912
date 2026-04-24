@@ -5,18 +5,21 @@ import { RouterModule, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { VideoService, SavedVideo } from '../../services/video.service';
 import { ToastService } from '../../services/toast.service';
+import { LanguageService } from '../../services/language.service';
+import { TranslatePipe } from '../../pipes/translate.pipe';
 import { ScriptFormatPipe } from '../../pipes/script-format.pipe';
 
 @Component({
   selector: 'app-videos',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, MatIconModule, ScriptFormatPipe, RouterModule, FormsModule],
+  imports: [CommonModule, MatIconModule, ScriptFormatPipe, TranslatePipe, RouterModule, FormsModule],
   templateUrl: './videos.component.html'
 })
 export class VideosComponent implements OnInit {
   private videoService = inject(VideoService);
   private toastService = inject(ToastService);
+  private languageService = inject(LanguageService);
   private router = inject(Router);
 
   videos = signal<SavedVideo[]>([]);

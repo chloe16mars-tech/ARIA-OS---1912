@@ -4,11 +4,12 @@ import { Router } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { CguComponent } from '../cgu/cgu.component';
 import { Capacitor } from '@capacitor/core';
+import { TranslatePipe } from '../../pipes/translate.pipe';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [MatIconModule, CguComponent],
+  imports: [MatIconModule, CguComponent, TranslatePipe],
   template: `
     <div class="min-h-screen flex flex-col items-center justify-center bg-[#F9F9FB] dark:bg-[#0A0A0C] p-4 relative">
       
@@ -19,13 +20,13 @@ import { Capacitor } from '@capacitor/core';
             <mat-icon class="text-white dark:text-black text-4xl w-full h-full flex items-center justify-center">auto_awesome</mat-icon>
           </div>
           <h1 class="text-4xl sm:text-5xl font-bold tracking-tight text-gray-900 dark:text-white pb-2 flex flex-col gap-2 items-center justify-center">
-            <span class="text-2xl font-semibold">Bienvenue sur</span>
+            <span class="text-2xl font-semibold">{{ 'login.welcome' | translate }}</span>
             <span class="font-black tracking-tight drop-shadow-sm">
                <span class="text-red-500">A</span><span class="text-orange-500">R</span><span class="text-yellow-500">I</span><span class="text-green-500">A</span><span class="text-gray-900 dark:text-white">OS</span>
             </span>
           </h1>
           <p class="text-gray-500 dark:text-gray-400 font-medium text-[15px] max-w-[280px] mx-auto leading-relaxed">
-            Connectez-vous pour extraire l'essence de vos médias, synchroniser vos analyses et discuter avec vos fichiers.
+            {{ 'login.desc' | translate }}
           </p>
         </div>
 
@@ -35,10 +36,10 @@ import { Capacitor } from '@capacitor/core';
               {{ errorMessage() }}
             </div>
           }
-          <button (click)="login()" [disabled]="isLoadingGoogle() || isLoadingAnon()" class="w-full relative flex items-center justify-center gap-3 bg-black dark:bg-white border border-transparent hover:bg-gray-800 dark:hover:bg-gray-200 text-white dark:text-black font-semibold py-4 px-4 rounded-2xl shadow-sm active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed">
+          <button (click)="login()" [disabled]="isLoadingGoogle()" class="w-full relative flex items-center justify-center gap-3 bg-black dark:bg-white border border-transparent hover:bg-gray-800 dark:hover:bg-gray-200 text-white dark:text-black font-semibold py-4 px-4 rounded-2xl shadow-sm active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed">
             @if (isLoadingGoogle()) {
               <div class="w-5 h-5 border-2 border-white dark:border-black border-t-transparent rounded-full animate-spin"></div>
-              Connexion en cours...
+              {{ 'common.loading' | translate }}
             } @else {
               <svg class="w-5 h-5" viewBox="0 0 24 24">
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -46,28 +47,13 @@ import { Capacitor } from '@capacitor/core';
                 <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
                 <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
               </svg>
-              Continuer avec Google
+              {{ 'login.google' | translate }}
             }
           </button>
-          
-          <div class="flex flex-col gap-2 mt-4">
-            <button (click)="loginAnonymously()" [disabled]="isLoadingGoogle() || isLoadingAnon()" class="w-full relative flex items-center justify-center gap-3 bg-white dark:bg-[#1C1C1E] border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-[#2C2C2E] text-gray-900 dark:text-white font-semibold py-4 px-4 rounded-2xl shadow-sm active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed">
-              @if (isLoadingAnon()) {
-                <div class="w-5 h-5 border-2 border-gray-900 dark:border-white border-t-transparent rounded-full animate-spin"></div>
-                Connexion en cours...
-              } @else {
-                <mat-icon>person_outline</mat-icon>
-                Essayer sans compte
-              }
-            </button>
-            <p class="text-[11px] text-gray-400 dark:text-gray-500 text-center leading-tight">
-              ⚠️ Le mode invité est un environnement de test éphémère. L'enregistrement vidéo au studio et la sauvegarde de l'historique sont désactivés.
-            </p>
-          </div>
         </div>
         
         <p class="text-center text-xs text-gray-500 mt-8 font-medium">
-          En vous connectant, vous acceptez nos <br><button (click)="showCgu.set(true)" class="text-black dark:text-white hover:underline font-bold cursor-pointer bg-transparent border-0 inline">Conditions Générales d'Utilisation</button>.
+          {{ 'login.cgu' | translate }} <br><button (click)="showCgu.set(true)" class="text-black dark:text-white hover:underline font-bold cursor-pointer bg-transparent border-0 inline">{{ 'settings.cgu' | translate }}</button>.
         </p>
       </div>
       
@@ -90,14 +76,13 @@ import { Capacitor } from '@capacitor/core';
 export class LoginComponent {
   errorMessage = signal<string | null>(null);
   isLoadingGoogle = signal(false);
-  isLoadingAnon = signal(false);
   showCgu = signal(false);
 
   private authService = inject(AuthService);
   private router = inject(Router);
 
   async login() {
-    if (this.isLoadingGoogle() || this.isLoadingAnon()) return;
+    if (this.isLoadingGoogle()) return;
     
     this.errorMessage.set(null);
     this.isLoadingGoogle.set(true);
@@ -115,6 +100,8 @@ export class LoginComponent {
 
       if (errorCode.includes('network-request-failed') || errorCode.includes('network error') || errorCode.includes('OFFLINE')) {
         this.errorMessage.set(`🔌 Vous êtes hors ligne.\nVeuillez vérifier votre connexion internet (Wi-Fi ou données mobiles) et réessayer.`);
+      } else if (errorCode.includes('popup-blocked')) {
+        this.errorMessage.set("🛑 La fenêtre de connexion a été bloquée par votre navigateur.\n\nVeuillez autoriser les fenêtres pop-up pour ce site et réessayer.");
       } else if (errorCode.includes('popup-closed-by-user') || errorCode.includes('SIGN_IN_CANCELLED')) {
         this.errorMessage.set("💡 La fenêtre de connexion a été fermée. Vous pouvez réessayer quand vous serez prêt.");
       } else if (errorCode.includes('cancelled-popup-request') || errorCode.includes('SIGN_IN_IN_PROGRESS')) {
@@ -130,30 +117,6 @@ export class LoginComponent {
         }
       }
       this.isLoadingGoogle.set(false);
-    }
-  }
-
-  async loginAnonymously() {
-    if (this.isLoadingGoogle() || this.isLoadingAnon()) return;
-
-    this.errorMessage.set(null);
-    this.isLoadingAnon.set(true);
-    try {
-      await this.authService.loginAnonymously();
-      this.router.navigate(['/']);
-    } catch (error: unknown) {
-      console.error('Anonymous login error', error);
-      const err = Object(error);
-      const errorCode = err?.code || err?.message || '';
-      
-      if (errorCode.includes('network-request-failed') || errorCode.includes('network error') || errorCode.includes('OFFLINE')) {
-        this.errorMessage.set(`🔌 Vous êtes hors ligne.\nVeuillez vérifier votre connexion internet (Wi-Fi ou données mobiles) et réessayer.`);
-      } else if (errorCode.includes('admin-restricted-operation')) {
-        this.errorMessage.set("🔧 La connexion invitée a été temporairement désactivée par l'administrateur.");
-      } else {
-        this.errorMessage.set("⚠️ Impossible d'accéder au mode invité pour le moment. Veuillez réessayer.");
-      }
-      this.isLoadingAnon.set(false);
     }
   }
 }

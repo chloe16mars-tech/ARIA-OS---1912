@@ -11,7 +11,13 @@ export class ThemeService {
   constructor() {
     if (isPlatformBrowser(this.platformId)) {
       // Check local storage or system preference
-      const savedTheme = localStorage.getItem('theme');
+      let savedTheme: string | null = null;
+      try {
+        savedTheme = localStorage.getItem('theme');
+      } catch (e) {
+        console.warn("localStorage not available for theme preference", e);
+      }
+      
       if (savedTheme === 'dark') {
         this.setDarkMode(true);
       } else if (savedTheme === 'light') {
@@ -32,10 +38,14 @@ export class ThemeService {
     if (isPlatformBrowser(this.platformId)) {
       if (isDark) {
         document.documentElement.classList.add('dark');
-        localStorage.setItem('theme', 'dark');
+        try {
+          localStorage.setItem('theme', 'dark');
+        } catch (e) { /* ignore */ }
       } else {
         document.documentElement.classList.remove('dark');
-        localStorage.setItem('theme', 'light');
+        try {
+          localStorage.setItem('theme', 'light');
+        } catch (e) { /* ignore */ }
       }
     }
   }

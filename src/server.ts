@@ -6,22 +6,26 @@ import {
   writeResponseToNodeResponse,
 } from '@angular/ssr/node';
 import express from 'express';
-import {join} from 'node:path';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { dirname } from 'node:path';
 import 'dotenv/config';
-import { GoogleGenAI } from '@google/genai';
 import { apiRouter } from './server/api.router.js';
 
-const browserDistFolder = join(import.meta.dirname, '../browser');
+// Compatible tsx (CJS) et ESM : import.meta.dirname peut être undefined sous tsx
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const browserDistFolder = join(__dirname, '../browser');
 
 const app = express();
-const angularApp = new AngularNodeAppEngine();
 
 app.use(express.json());
 
+// API routes — disponibles en dev et en production
 app.use('/api', apiRouter);
 
 /**
- * Serve static files from /browser
+ * Serve static files from /browser (production only)
  */
 app.use(
   express.static(browserDistFolder, {
@@ -33,8 +37,17 @@ app.use(
 
 /**
  * Handle all other requests by rendering the Angular application.
+ * AngularNodeAppEngine est instanciée en lazy pour éviter un crash
+ * en mode dev (tsx) où le manifest Angular n'est pas encore compilé.
  */
 app.use((req, res, next) => {
+  let angularApp: AngularNodeAppEngine;
+  try {
+    angularApp = new AngularNodeAppEngine();
+  } catch {
+    // En mode dev (tsx sans build Angular), on laisse passer — ng serve gère le frontend
+    return next();
+  }
   angularApp
     .handle(req)
     .then((response) =>
@@ -55,6 +68,6 @@ if (isMainModule(import.meta.url)) {
 }
 
 /**
- * Request handler used by the Angular CLI (for dev-server and during build) or Firebase Cloud Functions.
+ * Request handler used by the Angular CLI (for dev-server and during build).
  */
 export const reqHandler = createNodeRequestHandler(app);

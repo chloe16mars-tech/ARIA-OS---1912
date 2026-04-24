@@ -3,7 +3,6 @@ import {RouterOutlet, Router} from '@angular/router';
 import {ThemeService} from './services/theme.service';
 import {AuthService} from './services/auth.service';
 import {UserService} from './services/user.service';
-import {Timestamp} from 'firebase/firestore';
 import { Capacitor } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { SplashScreen } from '@capacitor/splash-screen';
@@ -26,9 +25,13 @@ export class App implements OnInit {
       // Setup dynamic StatusBar colors according to the Angular theme context
       if (Capacitor.isNativePlatform()) {
         const isDark = this.themeService.isDarkMode();
-        StatusBar.setStyle({ style: isDark ? Style.Dark : Style.Light }).catch(() => {});
+        StatusBar.setStyle({ style: isDark ? Style.Dark : Style.Light }).catch(() => {
+          // Status bar not available or failed to set
+        });
         if (Capacitor.getPlatform() === 'android') {
-          StatusBar.setBackgroundColor({ color: isDark ? '#0A0A0C' : '#F9F9FB' }).catch(() => {});
+          StatusBar.setBackgroundColor({ color: isDark ? '#0A0A0C' : '#F9F9FB' }).catch(() => {
+            // Fails on some versions/platforms
+          });
         }
       }
 
@@ -36,12 +39,16 @@ export class App implements OnInit {
         this.checkAccountDeletion();
         // Hide splash screen once auth state is fully evaluated
         if (Capacitor.isNativePlatform()) {
-          SplashScreen.hide().catch(() => {});
+          SplashScreen.hide().catch(() => {
+            // Splash screen might not be present
+          });
         }
       } else if (this.authService.isAuthReady() && !this.authService.currentUser()) {
         // Also hide it if user is logged out and ready to see the login page
         if (Capacitor.isNativePlatform()) {
-          SplashScreen.hide().catch(() => {});
+          SplashScreen.hide().catch(() => {
+             // Splash screen might not be present
+          });
         }
       }
     });
@@ -64,8 +71,8 @@ export class App implements OnInit {
 
   private checkAccountDeletion() {
     const unsubscribe = this.userService.getUserProfileSnapshot(async (profile) => {
-      if (profile && profile['scheduledDeletionDate']) {
-        const deletionDate = (profile['scheduledDeletionDate'] as Timestamp).toDate();
+      if (profile && profile.scheduled_deletion_date) {
+        const deletionDate = new Date(profile.scheduled_deletion_date);
         if (new Date() > deletionDate) {
           try {
             await this.userService.deleteUserAccount();

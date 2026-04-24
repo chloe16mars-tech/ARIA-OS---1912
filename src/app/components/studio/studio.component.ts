@@ -2,6 +2,7 @@ import { Component, ElementRef, OnDestroy, OnInit, ViewChild, signal, computed, 
 import { Router } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { Location } from '@angular/common';
+import { TranslatePipe } from '../../pipes/translate.pipe';
 import { VideoService } from '../../services/video.service';
 import { ToastService } from '../../services/toast.service';
 import { ScriptService, ScriptData } from '../../services/script.service';
@@ -10,13 +11,13 @@ import { ScriptService, ScriptData } from '../../services/script.service';
   selector: 'app-studio',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatIconModule],
+  imports: [MatIconModule, TranslatePipe],
   template: `
     <div class="fixed inset-0 bg-black z-50 flex flex-col">
       <!-- Header -->
       <div class="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-40 bg-gradient-to-b from-black/80 to-transparent">
         <button (click)="goBack()" class="px-4 py-2 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/70 transition-colors border border-white/10 gap-2 font-medium text-sm">
-          <mat-icon class="text-[18px]">close</mat-icon> Quitter
+          <mat-icon class="text-[18px]">close</mat-icon> {{ 'studio.actions.quit' | translate }}
         </button>
         
         @if (isRecording()) {
@@ -26,7 +27,7 @@ import { ScriptService, ScriptData } from '../../services/script.service';
           </div>
         } @else {
           <button (click)="openScriptSelector()" class="px-4 py-1.5 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/5 transition-colors flex items-center gap-2 group">
-            <span class="text-white/90 font-medium text-sm truncate max-w-[200px]">{{ scriptContent() ? 'Studio : ' + scriptTitle() : 'Sélectionner un script' }}</span>
+            <span class="text-white/90 font-medium text-sm truncate max-w-[200px]">{{ scriptContent() ? ('Studio : ' + scriptTitle()) : ('studio.actions.selectScript' | translate) }}</span>
             <mat-icon class="text-[16px] text-white/50 group-hover:text-white/90 transition-colors">arrow_drop_down</mat-icon>
           </button>
         }
@@ -44,10 +45,10 @@ import { ScriptService, ScriptData } from '../../services/script.service';
               <div class="w-20 h-20 rounded-full bg-violet-500/20 flex items-center justify-center mb-6 text-violet-400">
                 <mat-icon class="text-4xl text-violet-300">videocam</mat-icon>
               </div>
-              <h3 class="text-2xl font-bold text-white mb-3">Autorisation requise</h3>
-              <p class="text-white/60 text-[15px] leading-relaxed mb-8">Pour filmer ou enregistrer votre voix, vous devez autoriser l'accès à votre caméra et votre microphone.</p>
+              <h3 class="text-2xl font-bold text-white mb-3">{{ 'studio.permission.title' | translate }}</h3>
+              <p class="text-white/60 text-[15px] leading-relaxed mb-8">{{ 'studio.permission.desc' | translate }}</p>
               <button (click)="requestPermissions()" class="w-full py-4 rounded-2xl bg-violet-600 text-white font-semibold hover:bg-violet-700 transition-colors flex items-center justify-center gap-2 text-[15px]">
-                <mat-icon>power_settings_new</mat-icon> Activer la caméra
+                <mat-icon>power_settings_new</mat-icon> {{ 'studio.permission.activate' | translate }}
               </button>
             </div>
           </div>
@@ -70,7 +71,7 @@ import { ScriptService, ScriptData } from '../../services/script.service';
                 <mat-icon class="text-white text-5xl">mic</mat-icon>
               </div>
             </div>
-            <p class="text-white/50 font-medium tracking-widest uppercase text-sm">Mode Audio Uniquement</p>
+            <p class="text-white/50 font-medium tracking-widest uppercase text-sm">{{ 'studio.mode.audio' | translate }}</p>
           </div>
         }
 
@@ -114,13 +115,13 @@ import { ScriptService, ScriptData } from '../../services/script.service';
           <!-- Post-Recording Controls -->
           <div class="flex items-center justify-center gap-4 max-w-md mx-auto">
             <button (click)="retake()" class="flex-1 py-3.5 rounded-2xl font-semibold bg-white/10 text-white hover:bg-white/20 backdrop-blur-md transition-colors disabled:opacity-50" [disabled]="isSaving()">
-              Recommencer
+              {{ 'studio.actions.retake' | translate }}
             </button>
             <button (click)="saveVideoToLibrary()" class="flex-1 py-3.5 rounded-2xl font-semibold bg-violet-600 text-white hover:bg-violet-700 transition-colors text-center flex items-center justify-center gap-2 disabled:opacity-50" [disabled]="isSaving()">
               @if (isSaving()) {
-                <mat-icon class="animate-spin">sync</mat-icon> Sauvegarde...
+                <mat-icon class="animate-spin">sync</mat-icon> {{ 'studio.actions.saving' | translate }}
               } @else {
-                <mat-icon>save</mat-icon> Enregistrer
+                <mat-icon>save</mat-icon> {{ 'studio.actions.save' | translate }}
               }
             </button>
           </div>
@@ -137,7 +138,7 @@ import { ScriptService, ScriptData } from '../../services/script.service';
                       <mat-icon class="text-[18px]">text_decrease</mat-icon>
                     </button>
                     <div class="flex flex-col items-center justify-center w-12">
-                      <span class="text-white/50 text-[10px] uppercase font-bold tracking-wider">Taille</span>
+                      <span class="text-white/50 text-[10px] uppercase font-bold tracking-wider">{{ 'studio.settings.size' | translate }}</span>
                       <span class="text-white font-mono text-sm font-bold">{{ fontSize() }}</span>
                     </div>
                     <button (click)="adjustFontSize(2)" class="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 text-white flex items-center justify-center transition-colors">
@@ -150,7 +151,7 @@ import { ScriptService, ScriptData } from '../../services/script.service';
                       <mat-icon class="text-[18px]">remove</mat-icon>
                     </button>
                     <div class="flex flex-col items-center justify-center w-12">
-                      <span class="text-white/50 text-[10px] uppercase font-bold tracking-wider">Vitesse</span>
+                      <span class="text-white/50 text-[10px] uppercase font-bold tracking-wider">{{ 'studio.settings.speed' | translate }}</span>
                       <span class="text-white font-mono text-sm font-bold">x{{ scrollSpeed() }}</span>
                     </div>
                     <button (click)="adjustSpeed(0.5)" class="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 text-white flex items-center justify-center transition-colors">
@@ -165,7 +166,7 @@ import { ScriptService, ScriptData } from '../../services/script.service';
                       <mat-icon class="text-[18px]">brightness_low</mat-icon>
                     </button>
                     <div class="flex flex-col items-center justify-center w-12">
-                      <span class="text-white/50 text-[10px] uppercase font-bold tracking-wider">Masque</span>
+                      <span class="text-white/50 text-[10px] uppercase font-bold tracking-wider">{{ 'studio.settings.mask' | translate }}</span>
                       <span class="text-white font-mono text-sm font-bold">{{ (maskOpacity() * 100).toFixed(0) }}%</span>
                     </div>
                     <button (click)="adjustMaskOpacity(0.1)" class="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 text-white flex items-center justify-center transition-colors">
@@ -178,7 +179,7 @@ import { ScriptService, ScriptData } from '../../services/script.service';
                           [class.bg-white]="textShadowEnabled()" [class.text-black]="textShadowEnabled()"
                           [class.bg-white/5]="!textShadowEnabled()" [class.text-white]="!textShadowEnabled()">
                     <mat-icon class="text-[18px]">{{ textShadowEnabled() ? 'format_color_text' : 'format_color_reset' }}</mat-icon>
-                    Ombre
+                    {{ 'studio.settings.shadow' | translate }}
                   </button>
                 </div>
               </div>
@@ -188,13 +189,13 @@ import { ScriptService, ScriptData } from '../../services/script.service';
             <div class="flex items-center justify-center gap-6">
               @if (!isRecording()) {
                 <div class="absolute left-6 flex gap-2">
-                  <button (click)="setRecordingMode('video-front')" [class.bg-white]="recordingMode() === 'video-front'" [class.text-black]="recordingMode() === 'video-front'" [class.bg-white/10]="recordingMode() !== 'video-front'" [class.text-white]="recordingMode() !== 'video-front'" class="w-10 h-10 rounded-full hover:bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/10" title="Caméra Frontale">
+                  <button (click)="setRecordingMode('video-front')" [class.bg-white]="recordingMode() === 'video-front'" [class.text-black]="recordingMode() === 'video-front'" [class.bg-white/10]="recordingMode() !== 'video-front'" [class.text-white]="recordingMode() !== 'video-front'" class="w-10 h-10 rounded-full hover:bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/10" [title]="'studio.actions.frontCam' | translate">
                     <mat-icon class="text-[20px]">camera_front</mat-icon>
                   </button>
-                  <button (click)="setRecordingMode('video-rear')" [class.bg-white]="recordingMode() === 'video-rear'" [class.text-black]="recordingMode() === 'video-rear'" [class.bg-white/10]="recordingMode() !== 'video-rear'" [class.text-white]="recordingMode() !== 'video-rear'" class="w-10 h-10 rounded-full hover:bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/10" title="Caméra Arrière">
+                  <button (click)="setRecordingMode('video-rear')" [class.bg-white]="recordingMode() === 'video-rear'" [class.text-black]="recordingMode() === 'video-rear'" [class.bg-white/10]="recordingMode() !== 'video-rear'" [class.text-white]="recordingMode() !== 'video-rear'" class="w-10 h-10 rounded-full hover:bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/10" [title]="'studio.actions.rearCam' | translate">
                     <mat-icon class="text-[20px]">camera_rear</mat-icon>
                   </button>
-                  <button (click)="setRecordingMode('audio')" [class.bg-white]="recordingMode() === 'audio'" [class.text-black]="recordingMode() === 'audio'" [class.bg-white/10]="recordingMode() !== 'audio'" [class.text-white]="recordingMode() !== 'audio'" class="w-10 h-10 rounded-full hover:bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/10" title="Audio Uniquement">
+                  <button (click)="setRecordingMode('audio')" [class.bg-white]="recordingMode() === 'audio'" [class.text-black]="recordingMode() === 'audio'" [class.bg-white/10]="recordingMode() !== 'audio'" [class.text-white]="recordingMode() !== 'audio'" class="w-10 h-10 rounded-full hover:bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/10" [title]="'studio.actions.audioOnly' | translate">
                     <mat-icon class="text-[20px]">mic</mat-icon>
                   </button>
                 </div>
@@ -234,10 +235,10 @@ import { ScriptService, ScriptData } from '../../services/script.service';
                <div class="w-20 h-20 rounded-full bg-violet-500/20 flex items-center justify-center mb-6 text-violet-400">
                   <mat-icon class="text-4xl text-violet-300">article</mat-icon>
                </div>
-               <h3 class="text-2xl font-bold text-white mb-3">Aucun script actif</h3>
-               <p class="text-white/60 text-[15px] leading-relaxed mb-8">Ajoutez un script généré au prompteur pour faciliter votre enregistrement et améliorer votre élocution.</p>
+               <h3 class="text-2xl font-bold text-white mb-3">{{ 'studio.empty.title' | translate }}</h3>
+               <p class="text-white/60 text-[15px] leading-relaxed mb-8">{{ 'studio.empty.desc' | translate }}</p>
                <button (click)="openScriptSelector()" class="w-full py-4 rounded-2xl bg-violet-600 text-white font-semibold hover:bg-violet-700 transition-colors flex items-center justify-center gap-2 text-[15px]">
-                 <mat-icon>format_list_bulleted</mat-icon> Parcourir mes scripts
+                 <mat-icon>format_list_bulleted</mat-icon> {{ 'studio.empty.browse' | translate }}
                </button>
              </div>
           </div>
@@ -250,7 +251,7 @@ import { ScriptService, ScriptData } from '../../services/script.service';
           <div class="p-6 flex items-center justify-between border-b border-white/10 shrink-0">
             <h2 class="text-xl md:text-2xl font-bold text-white flex items-center gap-3 tracking-tight">
               <mat-icon class="text-violet-400">text_snippet</mat-icon>
-              Sélectionner un script
+              {{ 'studio.selector.title' | translate }}
             </h2>
             <button (click)="closeScriptSelector()" class="w-10 h-10 rounded-full bg-white/5 hover:bg-white/15 text-white flex items-center justify-center transition-colors">
               <mat-icon>close</mat-icon>
@@ -268,10 +269,10 @@ import { ScriptService, ScriptData } from '../../services/script.service';
                   <div class="w-24 h-24 rounded-full bg-white/5 flex items-center justify-center mb-6">
                     <mat-icon class="text-5xl text-white/20">note_add</mat-icon>
                   </div>
-                  <h3 class="text-xl font-bold text-white mb-2">Aucun script disponible</h3>
-                  <p class="text-white/50 text-sm mb-8 max-w-sm">Vous n'avez pas encore généré de script.</p>
+                  <h3 class="text-xl font-bold text-white mb-2">{{ 'studio.selector.empty' | translate }}</h3>
+                  <p class="text-white/50 text-sm mb-8 max-w-sm">{{ 'studio.selector.emptyDesc' | translate }}</p>
                   <button (click)="goToHome()" class="px-6 py-3 bg-violet-600 hover:bg-violet-700 text-white font-semibold rounded-xl transition-colors flex items-center gap-2">
-                    <mat-icon>auto_awesome</mat-icon> Créer un script
+                    <mat-icon>auto_awesome</mat-icon> {{ 'studio.selector.create' | translate }}
                   </button>
                </div>
             } @else {
@@ -293,7 +294,7 @@ import { ScriptService, ScriptData } from '../../services/script.service';
               @if (hasMoreScripts()) {
                 <div class="flex justify-center mt-6 mb-2">
                   <button (click)="loadMoreScripts()" class="px-6 py-2.5 bg-white/10 border border-white/10 rounded-xl text-sm font-semibold hover:bg-white/20 transition-colors shadow-sm text-white">
-                    Charger plus de scripts
+                    {{ 'studio.selector.loadMore' | translate }}
                   </button>
                 </div>
               }

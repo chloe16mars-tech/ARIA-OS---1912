@@ -1,8 +1,8 @@
 <div class="p-4 max-w-5xl mx-auto space-y-6 pb-24">
   <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mt-4">
     <div class="space-y-1">
-      <h2 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">Historique</h2>
-      <p class="text-base font-medium text-gray-500 dark:text-gray-400">Retrouvez et gérez vos scripts.</p>
+      <h2 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">{{ 'history.title' | translate }}</h2>
+      <p class="text-base font-medium text-gray-500 dark:text-gray-400">{{ 'history.desc' | translate }}</p>
     </div>
 
     <!-- Search and Sort (AriaOS match style) -->
@@ -15,7 +15,7 @@
             type="text" 
             [ngModel]="searchQuery()"
             (ngModelChange)="searchQuery.set($event)"
-            placeholder="Rechercher..." 
+            [placeholder]="'history.search' | translate" 
             class="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-[#1C1C1E] border border-gray-200 dark:border-gray-800 rounded-xl text-sm focus:outline-none transition-all duration-300 shadow-sm font-medium text-gray-900 dark:text-white placeholder:text-gray-400"
           >
         </div>
@@ -26,10 +26,10 @@
             (ngModelChange)="sortBy.set($event)"
             class="bg-white dark:bg-[#1C1C1E] border border-gray-200 dark:border-gray-800 rounded-xl text-sm pl-3 pr-8 py-2.5 outline-none transition-all duration-300 shadow-sm font-medium appearance-none h-full text-gray-900 dark:text-white"
           >
-            <option value="dateDesc">Plus récents</option>
-            <option value="dateAsc">Plus anciens</option>
-            <option value="titleAsc">De A à Z</option>
-            <option value="titleDesc">De Z à A</option>
+            <option value="dateDesc">{{ 'history.sort.recent' | translate }}</option>
+            <option value="dateAsc">{{ 'history.sort.old' | translate }}</option>
+            <option value="titleAsc">{{ 'history.sort.az' | translate }}</option>
+            <option value="titleDesc">{{ 'history.sort.za' | translate }}</option>
           </select>
           <mat-icon class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none text-[18px]">expand_more</mat-icon>
         </div>
@@ -49,7 +49,7 @@
               [class.border]="currentTab() === 'active'"
               [class.border-transparent]="currentTab() !== 'active'"
               [class.dark:border-gray-700]="currentTab() === 'active'">
-        Actifs ({{ activeScripts().length }})
+        {{ 'history.tabs.active' | translate }} ({{ activeScripts().length }})
       </button>
       <button (click)="currentTab.set('trash')" 
               class="px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 flex items-center gap-1.5"
@@ -62,7 +62,7 @@
               [class.border]="currentTab() === 'trash'"
               [class.border-transparent]="currentTab() !== 'trash'"
               [class.dark:border-gray-700]="currentTab() === 'trash'">
-        Corbeille ({{ trashedScripts().length }})
+        {{ 'history.tabs.trash' | translate }} ({{ trashedScripts().length }})
       </button>
     </div>
   </div>
@@ -89,10 +89,18 @@
           <mat-icon class="text-4xl text-gray-400">{{ currentTab() === 'trash' ? 'delete_outline' : 'history' }}</mat-icon>
         </div>
         <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">
-          {{ currentTab() === 'trash' ? 'Corbeille vide' : (searchQuery() ? 'Aucun résultat' : 'Aucun script généré') }}
+          @if (currentTab() === 'trash') {
+            {{ 'history.trash.empty' | translate }}
+          } @else {
+            {{ (searchQuery() ? 'history.noResults' : 'history.empty') | translate }}
+          }
         </h3>
         <p class="text-gray-500 dark:text-gray-400 max-w-sm mx-auto text-sm font-medium">
-          {{ currentTab() === 'trash' ? 'Les éléments supprimés apparaîtront ici.' : (searchQuery() ? 'Essayez de modifier votre recherche.' : 'Vos créations futures seront listées ici.') }}
+          @if (currentTab() === 'trash') {
+            {{ 'history.trash.emptyDesc' | translate }}
+          } @else {
+            {{ (searchQuery() ? 'history.searchEmptyDesc' : 'history.emptyDesc') | translate }}
+          }
         </p>
       </div>
   } @else {
@@ -109,7 +117,7 @@
               <div class="flex-1 min-w-0 group/title">
                 @if (editingTitleId() === script.id && currentTab() === 'active') {
                    <div class="flex items-center gap-2 mb-2" (click)="$event.stopPropagation()">
-                     <input #titleInput type="text" [value]="script.title || ''" (keydown.enter)="saveTitle(script.id, titleInput.value)" (blur)="editingTitleId.set(null)" class="w-full bg-gray-100 dark:bg-[#2C2C2E] border-none rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-violet-500 outline-none font-bold text-gray-900 dark:text-white" placeholder="Titre personnalisé..." autofocus>
+                     <input #titleInput type="text" [value]="script.title || ''" (keydown.enter)="saveTitle(script.id, titleInput.value)" (blur)="editingTitleId.set(null)" class="w-full bg-gray-100 dark:bg-[#2C2C2E] border-none rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-violet-500 outline-none font-bold text-gray-900 dark:text-white" [placeholder]="'history.customTitle' | translate" autofocus>
                      <button (click)="saveTitle(script.id, titleInput.value)" class="text-green-600 hover:text-green-700 p-2 rounded-xl hover:bg-green-50 transition-colors">
                        <mat-icon class="text-[18px]">check</mat-icon>
                      </button>
@@ -150,21 +158,21 @@
           <div class="flex justify-between items-center border-t border-gray-100 dark:border-gray-800 pt-4 mt-auto">
             <span class="text-xs font-medium text-gray-500 flex items-center gap-1">
                <mat-icon class="text-[14px]">schedule</mat-icon>
-               {{ currentTab() === 'active' ? ($any(script.createdAt)?.toDate() | date:'dd MMM yyyy à HH:mm') : ($any(script.deletedAt)?.toDate() | date:'dd MMM yyyy à HH:mm') }}
+               {{ currentTab() === 'active' ? (script.created_at | date:'dd MMM yyyy à HH:mm') : (script.trashed_at | date:'dd MMM yyyy à HH:mm') }}
             </span>
             <div class="flex items-center gap-1">
               @if (currentTab() === 'active') {
-                <button (click)="copy(script.content, $event)" class="text-gray-500 hover:text-blue-600 p-2 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors" title="Copier">
+                <button (click)="copy(script.content, $event)" class="text-gray-500 hover:text-blue-600 p-2 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors" [title]="'common.copy' | translate">
                   <mat-icon class="text-[18px]">content_copy</mat-icon>
                 </button>
-                <button (click)="confirmDelete(script.id!, $event)" class="text-gray-500 hover:text-red-600 p-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" title="Mettre à la corbeille">
+                <button (click)="confirmDelete(script.id!, $event)" class="text-gray-500 hover:text-red-600 p-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" [title]="'history.actions.trash' | translate">
                   <mat-icon class="text-[18px]">delete_outline</mat-icon>
                 </button>
               } @else {
-                <button (click)="restoreScript(script.id!, $event)" class="text-green-600 dark:text-green-400 hover:text-green-700 p-2 rounded-xl hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors font-semibold flex items-center gap-1" title="Restaurer">
-                  <mat-icon class="text-[18px]">restore</mat-icon> Restaurer
+                <button (click)="restoreScript(script.id!, $event)" class="text-green-600 dark:text-green-400 hover:text-green-700 p-2 rounded-xl hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors font-semibold flex items-center gap-1" [title]="'history.actions.restore' | translate">
+                  <mat-icon class="text-[18px]">restore</mat-icon> {{ 'history.actions.restore' | translate }}
                 </button>
-                <button (click)="confirmHardDelete(script.id!, $event)" class="text-red-500 hover:text-red-600 p-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors font-semibold flex items-center gap-1" title="Supprimer définitivement">
+                <button (click)="confirmHardDelete(script.id!, $event)" class="text-red-500 hover:text-red-600 p-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors font-semibold flex items-center gap-1" [title]="'history.actions.deleteForever' | translate">
                   <mat-icon class="text-[18px]">delete_forever</mat-icon>
                 </button>
               }
@@ -184,7 +192,7 @@
       <!-- Header -->
       <div class="p-6 border-b border-gray-100 dark:border-gray-800 flex justify-between items-start bg-gray-50/50 dark:bg-[#1C1C1E]">
         <div>
-          <h3 class="text-xl font-bold tracking-tight mb-3">Détails du script</h3>
+          <h3 class="text-xl font-bold tracking-tight mb-3">{{ 'history.modal.details' | translate }}</h3>
           <div class="flex flex-wrap gap-2 mb-3">
             <span class="px-3 py-1.5 bg-black dark:bg-white text-white dark:text-black text-xs font-bold rounded-xl">{{ selectedScript()?.intention }}</span>
             <span class="px-3 py-1.5 bg-white dark:bg-[#2C2C2E] text-gray-700 dark:text-gray-300 text-xs font-semibold rounded-xl border border-gray-200 dark:border-gray-700">{{ selectedScript()?.tone }}</span>
@@ -203,10 +211,10 @@
       <!-- Footer -->
       <div class="p-4 sm:p-6 border-t border-gray-100 dark:border-gray-800 flex gap-2 sm:gap-3 bg-gray-50/50 dark:bg-[#1C1C1E] flex-wrap sm:flex-nowrap">
         <button (click)="goToStudio(selectedScript()!)" class="flex-1 py-3.5 rounded-2xl font-bold bg-violet-600 text-white hover:bg-violet-700 transition-colors flex items-center justify-center gap-2 shadow-sm active:scale-[0.98]">
-          <mat-icon class="text-[20px]">videocam</mat-icon> Studio
+          <mat-icon class="text-[20px]">videocam</mat-icon> {{ 'history.modal.studio' | translate }}
         </button>
         <button (click)="editScript(selectedScript()!)" class="flex-1 py-3.5 rounded-2xl font-bold bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors flex items-center justify-center gap-2 shadow-sm active:scale-[0.98]">
-          <mat-icon class="text-[20px]">edit</mat-icon> Modifier
+          <mat-icon class="text-[20px]">edit</mat-icon> {{ 'common.edit' | translate }}
         </button>
       </div>
     </div>
@@ -221,12 +229,12 @@
         <mat-icon class="text-red-500 text-3xl w-8 h-8">delete_outline</mat-icon>
       </div>
       <div>
-        <h3 class="text-xl font-bold tracking-tight mb-2">Mettre à la corbeille ?</h3>
-        <p class="text-sm text-gray-500 dark:text-gray-400 font-medium">Ce script sera déplacé dans la corbeille et pourra être restauré.</p>
+        <h3 class="text-xl font-bold tracking-tight mb-2">{{ 'history.trash.confirmTitle' | translate }}</h3>
+        <p class="text-sm text-gray-500 dark:text-gray-400 font-medium">{{ 'history.trash.confirmDesc' | translate }}</p>
       </div>
       <div class="flex gap-3">
-        <button (click)="cancelDelete()" class="flex-1 py-3 rounded-2xl font-bold border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#2C2C2E] text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors shadow-sm">Annuler</button>
-        <button (click)="executeDelete()" class="flex-1 py-3 rounded-2xl font-bold bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm">Confirmer</button>
+        <button (click)="cancelDelete()" class="flex-1 py-3 rounded-2xl font-bold border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#2C2C2E] text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors shadow-sm">{{ 'common.cancel' | translate }}</button>
+        <button (click)="executeDelete()" class="flex-1 py-3 rounded-2xl font-bold bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm">{{ 'common.confirm' | translate }}</button>
       </div>
     </div>
   </div>
@@ -240,12 +248,12 @@
         <mat-icon class="text-red-600 text-3xl w-8 h-8">delete_forever</mat-icon>
       </div>
       <div>
-        <h3 class="text-xl font-bold tracking-tight mb-2">Suppression définitive</h3>
-        <p class="text-sm text-gray-500 dark:text-gray-400 font-medium">Cette action est irréversible. Le script sera supprimé pour toujours.</p>
+        <h3 class="text-xl font-bold tracking-tight mb-2">{{ 'history.trash.hardConfirmTitle' | translate }}</h3>
+        <p class="text-sm text-gray-500 dark:text-gray-400 font-medium">{{ 'history.trash.hardConfirmDesc' | translate }}</p>
       </div>
       <div class="flex gap-3">
-        <button (click)="cancelHardDelete()" class="flex-1 py-3 rounded-2xl font-bold border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#2C2C2E] text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors shadow-sm">Annuler</button>
-        <button (click)="executeHardDelete()" class="flex-1 py-3 rounded-2xl font-bold bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm">Supprimer</button>
+        <button (click)="cancelHardDelete()" class="flex-1 py-3 rounded-2xl font-bold border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#2C2C2E] text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors shadow-sm">{{ 'common.cancel' | translate }}</button>
+        <button (click)="executeHardDelete()" class="flex-1 py-3 rounded-2xl font-bold bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm">{{ 'history.actions.delete' | translate }}</button>
       </div>
     </div>
   </div>

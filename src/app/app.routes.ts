@@ -17,6 +17,7 @@ const authGuard = async () => {
 
 export const routes: Routes = [
   { path: 'login', loadComponent: () => import('./components/login/login.component').then(m => m.LoginComponent) },
+  { path: 'auth/callback', loadComponent: () => import('./components/auth-callback/auth-callback.component').then(m => m.AuthCallbackComponent) },
   {
     path: '',
     loadComponent: () => import('./components/layout/layout.component').then(m => m.LayoutComponent),

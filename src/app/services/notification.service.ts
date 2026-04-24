@@ -1,6 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { db, handleFirestoreError, OperationType } from '../../firebase';
-import { collection, query, onSnapshot, doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
+import { supabase } from '../../supabase';
 import { AuthService } from './auth.service';
 
 export interface AppNotification {
@@ -8,7 +7,7 @@ export interface AppNotification {
   title: string;
   message: string;
   type: 'update' | 'info' | 'alert';
-  createdAt: Timestamp;
+  created_at: string;
 }
 
 @Injectable({
@@ -21,41 +20,54 @@ export class NotificationService {
     const user = this.authService.currentUser();
     if (!user) return () => { /* no-op */ };
 
-    const q = query(collection(db, 'notifications'));
+    this.fetchNotifications(callback);
+
+    const channel = supabase
+      .channel('notifications')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'notifications' },
+        () => {
+          this.fetchNotifications(callback);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }
+
+  private async fetchNotifications(callback: (notifications: AppNotification[]) => void) {
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .order('created_at', { ascending: false });
     
-    return onSnapshot(q, (snapshot) => {
-      const notifications = snapshot.docs.map(docSnap => ({
-        id: docSnap.id,
-        ...docSnap.data()
-      } as AppNotification));
-      
-      notifications.sort((a, b) => {
-        const timeA = a.createdAt ? (typeof a.createdAt.toMillis === 'function' ? a.createdAt.toMillis() : 0) : 0;
-        const timeB = b.createdAt ? (typeof b.createdAt.toMillis === 'function' ? b.createdAt.toMillis() : 0) : 0;
-        return timeB - timeA;
-      });
-      callback(notifications);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'notifications');
-    });
+    if (!error) {
+      callback(data as AppNotification[]);
+    }
   }
 
   async markNotificationAsRead(notificationId: string) {
     const user = this.authService.currentUser();
     if (!user) return;
 
-    const userRef = doc(db, 'users', user.uid);
-    try {
-      const docSnap = await getDoc(userRef);
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        const readNotifications = data['readNotifications'] || [];
-        if (!readNotifications.includes(notificationId)) {
-          await setDoc(userRef, { readNotifications: [...readNotifications, notificationId] }, { merge: true });
-        }
+    // Get current profile
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('read_notifications')
+      .eq('id', user.id)
+      .single();
+
+    if (profile) {
+      const readNotifications = profile.read_notifications || [];
+      if (!readNotifications.includes(notificationId)) {
+        await supabase
+          .from('profiles')
+          .update({ read_notifications: [...readNotifications, notificationId] })
+          .eq('id', user.id);
       }
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, 'users');
     }
   }
 
@@ -63,18 +75,21 @@ export class NotificationService {
     const user = this.authService.currentUser();
     if (!user) return;
 
-    const userRef = doc(db, 'users', user.uid);
-    try {
-      const docSnap = await getDoc(userRef);
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        const deletedNotifications = data['deletedNotifications'] || [];
-        if (!deletedNotifications.includes(notificationId)) {
-          await setDoc(userRef, { deletedNotifications: [...deletedNotifications, notificationId] }, { merge: true });
-        }
+    // Get current profile
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('deleted_notifications')
+      .eq('id', user.id)
+      .single();
+
+    if (profile) {
+      const deletedNotifications = profile.deleted_notifications || [];
+      if (!deletedNotifications.includes(notificationId)) {
+        await supabase
+          .from('profiles')
+          .update({ deleted_notifications: [...deletedNotifications, notificationId] })
+          .eq('id', user.id);
       }
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, 'users');
     }
   }
 }

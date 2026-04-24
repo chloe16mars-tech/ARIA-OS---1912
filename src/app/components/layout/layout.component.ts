@@ -7,12 +7,13 @@ import { NotificationService, AppNotification } from '../../services/notificatio
 import { UserService, UserProfile } from '../../services/user.service';
 import { AuthService } from '../../services/auth.service';
 import { ToastComponent } from '../ui/toast/toast.component';
+import { TranslatePipe } from '../../pipes/translate.pipe';
 
 @Component({
   selector: 'app-layout',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive, MatIconModule, ToastComponent],
+  imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive, MatIconModule, ToastComponent, TranslatePipe],
   template: `
     <div class="min-h-screen flex flex-col bg-[#F9F9FB] dark:bg-[#0A0A0C] text-gray-900 dark:text-gray-100 relative">
       <app-toast />
@@ -28,11 +29,15 @@ import { ToastComponent } from '../ui/toast/toast.component';
                <span class="text-red-500">A</span><span class="text-orange-500">R</span><span class="text-yellow-500">I</span><span class="text-green-500">A</span><span class="text-gray-900 dark:text-white">OS</span>
             </h1>
           </div>
-          <div class="bg-gray-50/80 dark:bg-[#1C1C1E]/80 px-3 py-1.5 rounded-full border-[0.5px] border-gray-200/50 dark:border-gray-800/50 flex items-center gap-2 shadow-sm">
-            <div class="relative w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-            <div class="flex flex-col">
-              <span class="text-[9px] uppercase tracking-wider text-gray-500 dark:text-gray-400 font-semibold leading-none mb-0.5">Scripts générés</span>
-              <span class="font-bold text-black dark:text-white leading-none font-mono text-sm">{{ totalGenerations() | number }}</span>
+          <!-- Premium High-Tech AI Generations Badge -->
+          <div class="relative group" [title]="'badge.scripts' | translate">
+            <div class="absolute -inset-0.5 bg-gradient-to-r from-red-500 via-orange-500 to-yellow-500 rounded-2xl blur-[2px] opacity-20 group-hover:opacity-40 transition-opacity duration-500"></div>
+            <div class="relative flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-white dark:bg-[#111] border border-gray-100 dark:border-white/5 shadow-sm">
+              <mat-icon class="text-orange-500 text-[18px] w-[18px] h-[18px] aria-breathe-anim">bolt</mat-icon>
+              <div class="flex flex-col">
+                <span class="text-[8px] font-black uppercase tracking-[0.2em] text-gray-400 dark:text-gray-600 leading-none mb-0.5">Global</span>
+                <span class="font-mono font-black text-gray-900 dark:text-white text-xs leading-none">{{ formatCompactNumber(totalGenerations()) }}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -53,16 +58,16 @@ import { ToastComponent } from '../ui/toast/toast.component';
         <nav class="bg-white/90 dark:bg-[#1C1C1E]/90 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 shadow-lg shadow-black/5 dark:shadow-black/20 rounded-[2rem] flex justify-around items-center px-2 py-2 gap-1 sm:gap-2 pointer-events-auto">
           <a routerLink="/" routerLinkActive="text-black dark:text-white bg-gray-100 dark:bg-[#2C2C2E]" [routerLinkActiveOptions]="{exact: true}" class="flex flex-col items-center justify-center rounded-2xl text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-100 w-[64px] h-[64px] sm:w-[72px] sm:h-[72px]">
             <mat-icon class="text-2xl">auto_awesome</mat-icon>
-            <span class="text-[10px] mt-1 font-medium truncate w-full text-center px-1">Générer</span>
+            <span class="text-[10px] mt-1 font-medium truncate w-full text-center px-1">{{ 'layout.generate' | translate }}</span>
           </a>
           @if (!authService.isAnonymous()) {
             <a routerLink="/history" routerLinkActive="text-black dark:text-white bg-gray-100 dark:bg-[#2C2C2E]" class="flex flex-col items-center justify-center rounded-2xl text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-100 w-[64px] h-[64px] sm:w-[72px] sm:h-[72px]">
               <mat-icon class="text-2xl">text_snippet</mat-icon>
-              <span class="text-[10px] mt-1 font-medium truncate w-full text-center px-1">Scripts</span>
+              <span class="text-[10px] mt-1 font-medium truncate w-full text-center px-1">{{ 'layout.scripts' | translate }}</span>
             </a>
             <a routerLink="/videos" routerLinkActive="text-black dark:text-white bg-gray-100 dark:bg-[#2C2C2E]" class="flex flex-col items-center justify-center rounded-2xl text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-100 w-[64px] h-[64px] sm:w-[72px] sm:h-[72px]">
               <mat-icon class="text-2xl">video_library</mat-icon>
-              <span class="text-[10px] mt-1 font-medium truncate w-full text-center px-1">Vidéos</span>
+              <span class="text-[10px] mt-1 font-medium truncate w-full text-center px-1">{{ 'layout.videos' | translate }}</span>
             </a>
           }
           <a routerLink="/notifications" routerLinkActive="text-black dark:text-white bg-gray-100 dark:bg-[#2C2C2E]" class="flex flex-col items-center justify-center rounded-2xl text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-100 w-[64px] h-[64px] sm:w-[72px] sm:h-[72px] relative">
@@ -72,11 +77,11 @@ import { ToastComponent } from '../ui/toast/toast.component';
                 <span class="absolute -top-1 -right-2 bg-red-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center border-2 border-white dark:border-[#1C1C1E]">{{ unreadCount() > 9 ? '9+' : unreadCount() }}</span>
               }
             </div>
-            <span class="text-[10px] mt-1 font-medium truncate w-full text-center px-1">Boîte</span>
+            <span class="text-[10px] mt-1 font-medium truncate w-full text-center px-1">{{ 'layout.inbox' | translate }}</span>
           </a>
           <a routerLink="/settings" routerLinkActive="text-black dark:text-white bg-gray-100 dark:bg-[#2C2C2E]" class="flex flex-col items-center justify-center rounded-2xl text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-100 w-[64px] h-[64px] sm:w-[72px] sm:h-[72px]">
             <mat-icon class="text-2xl">person</mat-icon>
-            <span class="text-[10px] mt-1 font-medium truncate w-full text-center px-1">Moi</span>
+            <span class="text-[10px] mt-1 font-medium truncate w-full text-center px-1">{{ 'layout.me' | translate }}</span>
           </a>
         </nav>
       </div>
@@ -97,13 +102,23 @@ export class LayoutComponent implements OnInit, OnDestroy {
   private userService = inject(UserService);
   public authService = inject(AuthService);
 
+  formatCompactNumber(num: number): string {
+    if (num >= 1000000) {
+      return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+    }
+    if (num >= 1000) {
+      return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+    }
+    return num.toString();
+  }
+
   unreadCount = computed(() => {
     const notifs = this.notifications();
     const profile = this.userProfile();
     if (!profile) return 0;
     
-    const deleted = profile.deletedNotifications || [];
-    const read = profile.readNotifications || [];
+    const deleted = profile.deleted_notifications || [];
+    const read = profile.read_notifications || [];
     
     return notifs.filter(n => !deleted.includes(n.id!) && !read.includes(n.id!)).length;
   });

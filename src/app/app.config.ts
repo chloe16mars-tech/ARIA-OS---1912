@@ -1,15 +1,16 @@
 import {
   ApplicationConfig,
   provideBrowserGlobalErrorListeners, isDevMode,
+  provideZonelessChangeDetection,
 } from '@angular/core';
 import {provideRouter, withInMemoryScrolling, withPreloading, PreloadAllModules} from '@angular/router';
 
 import {routes} from './app.routes';
-import { provideServiceWorker } from '@angular/service-worker';
 
 export const appConfig: ApplicationConfig = {
-  providers: [provideBrowserGlobalErrorListeners(), provideRouter(routes, withInMemoryScrolling({ scrollPositionRestoration: 'top' }), withPreloading(PreloadAllModules)), provideServiceWorker('ngsw-worker.js', {
-            enabled: !isDevMode(),
-            registrationStrategy: 'registerWhenStable:30000'
-          })],
+  providers: [
+    provideZonelessChangeDetection(),
+    provideBrowserGlobalErrorListeners(),
+    provideRouter(routes, withInMemoryScrolling({ scrollPositionRestoration: 'top' }), withPreloading(PreloadAllModules)),
+  ],
 };

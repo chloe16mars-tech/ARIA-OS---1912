@@ -1,11 +1,12 @@
 import { Component, input, output, computed } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
+import { TranslatePipe } from '../../pipes/translate.pipe';
 import { SafeUrlPipe } from '../../pipes/safe-url.pipe';
 
 @Component({
   selector: 'app-source-viewer',
   standalone: true,
-  imports: [MatIconModule, SafeUrlPipe],
+  imports: [MatIconModule, SafeUrlPipe, TranslatePipe],
   template: `
     @if (url()) {
       <div class="fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex flex-col transition-all duration-200 animate-in fade-in zoom-in-95">
@@ -15,12 +16,12 @@ import { SafeUrlPipe } from '../../pipes/safe-url.pipe';
               <span class="font-black tracking-tighter text-2xl">1912</span>
               <div class="hidden sm:flex items-center gap-2 px-3 py-1 bg-white/10 rounded-full">
                 <mat-icon class="text-[16px]">{{ isYouTube() ? 'play_circle' : 'article' }}</mat-icon>
-                <span class="text-xs font-medium">{{ isYouTube() ? 'Lecteur Vidéo' : 'Navigateur Interne' }}</span>
+                <span class="text-xs font-medium">{{ (isYouTube() ? 'source.videoPlayer' : 'source.browser') | translate }}</span>
               </div>
               <p class="text-xs text-gray-400 truncate max-w-[150px] sm:max-w-md ml-2">{{ url() }}</p>
             </div>
             <div class="flex items-center gap-2 shrink-0">
-              <a [href]="url()" target="_blank" class="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-colors flex items-center justify-center" title="Ouvrir dans un nouvel onglet">
+              <a [href]="url()" target="_blank" class="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-colors flex items-center justify-center" [title]="'source.openNewTab' | translate">
                 <mat-icon>open_in_new</mat-icon>
               </a>
               <button (click)="closeViewer.emit()" class="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-colors flex items-center justify-center">

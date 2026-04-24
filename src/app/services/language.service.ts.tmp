@@ -1,0 +1,2117 @@
+import { Injectable, signal } from '@angular/core';
+
+export type Language = 'fr' | 'en' | 'zh' | 'ar' | 'es' | 'pt';
+
+export const TRANSLATIONS: Record<Language, Record<string, string>> = {
+  fr: {
+    // Layout & Global
+    'layout.generate': 'Générer',
+    'layout.scripts': 'Scripts',
+    'layout.videos': 'Vidéos',
+    'layout.inbox': 'Boîte',
+    'layout.me': 'Moi',
+    'badge.scripts': 'Scripts générés',
+    'common.cancel': 'Annuler',
+    'common.confirm': 'Confirmer',
+    'common.back': 'Retour',
+    'common.save': 'Sauvegarder',
+    'common.saved': 'Sauvegardé',
+    'common.delete': 'Supprimer',
+    'common.close': 'Fermer',
+    'common.copy': 'Copier',
+    'common.download': 'Télécharger',
+    'common.share': 'Partager',
+    'common.loading': 'Chargement...',
+
+    // Settings
+    'settings.title': 'Profil & Réglages',
+    'settings.desc': 'Gérez votre compte et vos préférences.',
+    'settings.guest': 'Invité',
+    'settings.noAccount': 'Mode sans compte',
+    'settings.generated': 'Générés',
+    'settings.logout': 'Déconnexion',
+    'settings.logout.title': 'Se déconnecter ?',
+    'settings.logout.desc': 'Vous devrez vous reconnecter pour accéder à vos scripts et préférences.',
+    'settings.deleteAccount': 'Supprimer mon compte',
+    'settings.delete.title': 'Supprimer le compte ?',
+    'settings.delete.desc': 'Cette action programmera la suppression de votre compte dans 3 jours. Vos données seront alors irrécupérables.',
+    'settings.preferences': 'Préférences',
+    'settings.darkMode': 'Mode sombre',
+    'settings.darkModeDesc': 'Inverser les couleurs de l\'interface',
+    'settings.language': 'Langue',
+    'settings.languageDesc': 'Choisissez la langue de l\'interface',
+    'settings.contact': 'Contactez l\'équipe',
+    'settings.cgu': 'Conditions Générales d\'Utilisation',
+    'settings.about': 'À propos d\'Aria OS',
+
+    // Settings Account & Modals
+    'settings.account.deleting': 'Suppression en cours...',
+    'settings.account.deletingDesc': 'Votre compte est en train d\'être détruit.',
+    'settings.account.scheduled': 'Suppression programmée',
+    'settings.account.scheduledDesc': 'Votre compte sera définitivement supprimé le',
+    'settings.account.cancelDelete': 'Annuler la suppression',
+    'settings.account.deleteAccount': 'Supprimer mon compte',
+    'settings.account.deleteWarning': 'Un délai de 3 jours sera appliqué avant la suppression définitive.',
+    'settings.modal.logoutTitle': 'Se déconnecter ?',
+    'settings.modal.logoutDesc': 'Vous devrez vous reconnecter pour accéder à vos scripts et préférences.',
+    'settings.modal.deleteTitle': 'Supprimer le compte ?',
+    'settings.modal.deleteDesc': 'Cette action programmera la suppression de votre compte dans 3 jours. Vos données seront alors irrécupérables.',
+
+    // About
+    'about.title': 'À propos',
+    'about.version': 'Version 4.0.0',
+    'about.desc': 'Aria OS est l\'atelier de contenu média de nouvelle génération. Il transforme n\'importe quelle source en scripts percutants.',
+    'about.why': 'Pourquoi Aria OS ?',
+    'about.whyDesc': 'Le mot Aria évoque une mélodie expressive. Aria OS vous aide à composer votre propre partition médiatique.',
+    'about.footer': 'Conçu et développé par',
+
+    // CGU
+    'legal.title': 'Mentions Légales & CGU',
+    'legal.tabs.cgu': 'Conditions Générales',
+    'legal.tabs.mentions': 'Mentions Légales',
+    'legal.tabs.privacy': 'Confidentialité',
+    'legal.update': 'Dernière mise à jour : 14 Avril 2026',
+
+    // History
+    'history.title': 'Historique',
+    'history.desc': 'Retrouvez et gérez vos scripts.',
+    'history.search': 'Rechercher...',
+    'history.sort.recent': 'Plus récents',
+    'history.sort.old': 'Plus anciens',
+    'history.sort.az': 'De A à Z',
+    'history.sort.za': 'De Z à A',
+    'history.tabs.active': 'Actifs',
+    'history.tabs.trash': 'Corbeille',
+    'history.empty': 'Aucun script généré',
+    'history.emptyDesc': 'Vos créations futures seront listées ici.',
+    'history.trash.empty': 'Corbeille vide',
+    'history.trash.emptyDesc': 'Les éléments supprimés apparaîtront ici.',
+    'history.noResults': 'Aucun résultat',
+    'history.searchEmptyDesc': 'Essayez de modifier votre recherche.',
+    'history.customTitle': 'Titre personnalisé...',
+    'history.actions.trash': 'Mettre à la corbeille',
+    'history.actions.restore': 'Restaurer',
+    'history.actions.deleteForever': 'Supprimer définitivement',
+    'history.actions.delete': 'Supprimer',
+    'history.modal.details': 'Détails du script',
+    'history.modal.studio': 'Studio',
+    'history.trash.confirmTitle': 'Mettre à la corbeille ?',
+    'history.trash.confirmDesc': 'Ce script sera déplacé dans la corbeille et pourra être restauré.',
+    'history.trash.hardConfirmTitle': 'Suppression définitive',
+    'history.trash.hardConfirmDesc': 'Cette action est irréversible. Le script sera supprimé pour toujours.',
+
+    // Home
+    'home.ad1.badge': 'Bêta Test',
+    'home.ad1.title': 'Monétisez votre contenu.',
+    'home.ad1.desc': 'Découvrez notre programme partenariat exclusif pour créateurs ARIAOS.',
+    'home.ad2.badge': 'Nouveauté',
+    'home.ad2.title': 'Export Multi-Formats',
+    'home.ad2.desc': 'Téléchargez vos scripts en PDF, Word, et format Prompteur interactif.',
+    'home.ad3.badge': 'Analyse',
+    'home.ad3.title': 'Comprenez l\'audience.',
+    'home.ad3.desc': 'De nouvelles métriques d\'impact disponibles sur vos derniers projets.',
+    'home.steps.load': 'Charger',
+    'home.steps.config': 'Configurer',
+    'home.steps.generate': 'Générer',
+    'home.source.title': 'Source du contenu',
+    'home.source.desc': 'Collez une URL (YouTube, Article, Blog...) ou du texte brut.',
+    'home.source.url': 'URL',
+    'home.source.rawText': 'Texte Brut',
+    'home.source.placeholderUrl': 'https://...',
+    'home.source.placeholderText': 'Collez votre texte ici...',
+    'home.source.errorUnsupported': 'Cette plateforme vidéo n\'est pas prise en charge. Seul YouTube est compatible.',
+    'home.source.errorInvalid': 'Veuillez entrer une URL valide (ex: https://...).',
+    'home.config.title': 'L\'Assistant de Configuration',
+    'home.config.desc': 'Laissez-vous guider pas à pas pour paramétrer la requête parfaite.',
+    'home.config.q1': '1. Quel est l\'objectif de ce script ?',
+    'home.config.q2': '2. Quel ton éditorial l\'IA doit-elle adopter ?',
+    'home.config.q3': '3. Quel doit être mon parti pris sur le sujet ?',
+    'home.config.q4': '4. Quelle est la durée cible de l\'audio ?',
+    'home.intentions.ana': 'Analyser',
+    'home.intentions.crit': 'Critiquer',
+    'home.intentions.expl': 'Expliquer',
+    'home.intentions.reph': 'Reformuler',
+    'home.intentions.deb': 'Débattre',
+    'home.tones.fact': 'Factuel (Neutre)',
+    'home.tones.punchy': 'Punchy (Dynamique)',
+    'home.tones.sat': 'Satyrique',
+    'home.tones.insp': 'Inspirant',
+    'home.tones.ana': 'Analytique',
+    'home.tones.drama': 'Dramatique',
+    'home.stances.obj': 'Objectif',
+    'home.stances.fav': 'Favorable (Élogieux)',
+    'home.stances.unfav': 'Défavorable (À charge)',
+    'home.durations.sec': 'sec',
+    'home.durations.min': 'min',
+    'home.durations.30s': '30 sec',
+    'home.durations.1m': '1 min',
+    'home.durations.2m': '2 min',
+    'home.durations.3m': '3 min',
+    'home.durations.5m': '5 min',
+    'home.actions.continue': 'Continuer',
+    'home.actions.back': 'Retour',
+    'home.actions.generate': 'Générer',
+    'home.actions.copy': 'Copier',
+    'home.actions.download': 'Télécharger',
+    'home.actions.new': 'Nouveau',
+    'home.actions.edit': 'Modifier le texte',
+    'home.actions.preview': 'Aperçu Pro',
+    'home.actions.studio': 'Studio',
+    'home.actions.save': 'Sauvegarder',
+    'home.actions.saved': 'Sauvegardé',
+    'home.actions.share': 'Partager',
+    'home.meta.words': 'mots',
+    'home.meta.author': 'Auteur',
+    'home.meta.anonAuthor': 'Auteur Anonyme',
+    'home.meta.generatedAt': 'Généré le',
+    'home.meta.at': 'à',
+    'home.meta.targetDuration': 'Durée cible',
+    'home.meta.thinkingTime': 'Temps de réflexion',
+    'home.meta.sourceText': 'Source textuelle',
+    'home.meta.loadingDesc': 'Veuillez patienter, cela peut prendre quelques secondes selon la complexité et la taille de la source.',
+    'home.meta.writing': 'En cours de rédaction...',
+    'home.meta.placeholderResult': 'Votre script apparaîtra ici...',
+    'home.ad.goToSlide': 'Aller à la slide',
+    'home.loading.m1': 'Analyse de la source de vos données...',
+    'home.loading.m2': 'Extraction de l\'essence du contenu...',
+    'home.loading.m3': 'Structuration de la narration du script...',
+    'home.loading.m4': 'Ajustement du ton professionnel...',
+    'home.loading.m5': 'Peaufinage du style journalistique...',
+    'home.loading.m6': 'Finalisation de la rédaction...',
+    'home.loading.d1': 'La génération prend un peu plus de temps que prévu...',
+    'home.loading.d2': 'Analyses complexes en cours de traitement...',
+    'home.loading.d3': 'La source est dense, nous redoublons d\'efforts...',
+    'home.loading.d4': 'Votre connexion internet semble peut-être ralentie...',
+    'home.loading.d5': 'Ne quittez pas, les données sont en cours d\'assemblage final...',
+
+    // Studio
+    'studio.actions.quit': 'Quitter',
+    'studio.actions.selectScript': 'Sélectionner un script',
+    'studio.permission.title': 'Autorisation requise',
+    'studio.permission.desc': 'Pour filmer ou enregistrer votre voix, vous devez autoriser l\'accès à votre caméra et votre microphone.',
+    'studio.permission.activate': 'Activer la caméra',
+    'studio.mode.audio': 'Mode Audio Uniquement',
+    'studio.actions.retake': 'Recommencer',
+    'studio.actions.saving': 'Sauvegarde...',
+    'studio.actions.save': 'Enregistrer',
+    'studio.settings.size': 'Taille',
+    'studio.settings.speed': 'Vitesse',
+    'studio.settings.mask': 'Masque',
+    'studio.settings.shadow': 'Ombre',
+    'studio.actions.frontCam': 'Caméra Frontale',
+    'studio.actions.rearCam': 'Caméra Arrière',
+    'studio.actions.audioOnly': 'Audio Uniquement',
+    'studio.empty.title': 'Aucun script actif',
+    'studio.empty.desc': 'Ajoutez un script généré au prompteur pour faciliter votre enregistrement et améliorer votre élocution.',
+    'studio.empty.browse': 'Parcourir mes scripts',
+    'studio.selector.title': 'Sélectionner un script',
+    'studio.selector.empty': 'Aucun script disponible',
+    'studio.selector.emptyDesc': 'Vous n\'avez pas encore généré de script.',
+    'studio.selector.create': 'Créer un script',
+    'studio.selector.loadMore': 'Charger plus de scripts',
+
+    // Videos
+    'videos.hero.new': 'Nouvel Enregistrement',
+    'videos.hero.desc': 'Ouvrir le studio d\'enregistrement',
+    'videos.title': 'Mes Vidéos',
+    'videos.desc': 'Retrouvez et gérez vos enregistrements.',
+    'videos.empty': 'Aucune vidéo trouvée',
+    'videos.emptyDesc': 'Essayez de modifier votre recherche ou allez dans le Studio pour en enregistrer une !',
+    'videos.actions.pin': 'Épingler',
+    'videos.actions.unpin': 'Désépingler',
+    'videos.actions.rename': 'Cliquer pour renommer',
+    'videos.actions.whatsapp': 'Partager sur WhatsApp',
+    'videos.actions.emptyTrash': 'Vider la corbeille',
+    'videos.scriptModal.title': 'Script de la vidéo',
+    'videos.loadMore': 'Charger plus de vidéos',
+
+    // Source Viewer
+    'source.videoPlayer': 'Lecteur Vidéo',
+    'source.browser': 'Navigateur Interne',
+    'source.openNewTab': 'Ouvrir dans un nouvel onglet',
+
+    // Notifications
+    'notif.title': 'Notifications',
+    'notif.desc': 'Restez informé des mises à jour.',
+    'notif.empty': 'Aucune notification',
+    'notif.emptyDesc': 'Vous êtes à jour ! Les nouvelles annonces apparaîtront ici.',
+    'notif.actions.markAsRead': 'Marquer comme lu',
+    'notif.actions.delete': 'Supprimer',
+    'notif.actions.deleteConfirm': 'Voulez-vous vraiment supprimer cette notification ?',
+
+    // Login
+    'login.welcome': 'Bienvenue sur',
+    'login.desc': 'Connectez-vous pour transformer vos sources en scripts vidéo.',
+    'login.google': 'Continuer avec Google',
+    'login.anonymous': 'Essayer sans compte',
+    'login.anonymousWarn': 'Le mode invité est éphémère. Les sauvegardes sont désactivées.',
+    'login.cgu': 'En vous connectant, vous acceptez les CGU.',
+
+    // Legal Content
+    'legal.cgu.text': `
+      <h2 class="text-2xl font-bold text-black dark:text-white mb-2">Conditions Générales d'Utilisation (CGU)</h2>
+      <p class="text-gray-500 mb-8">Dernière mise à jour : 14 Avril 2026</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">Article 1 : Objet</h3>
+      <p>Les présentes Conditions Générales d'Utilisation (ci-après « CGU ») ont pour objet de définir les modalités et conditions dans lesquelles la société Mmedia Universe (ci-après « l'Éditeur ») met à la disposition des utilisateurs (ci-après « l'Utilisateur ») l'application Aria OS (ci-après « l'Application »), ainsi que les droits et obligations des parties dans ce cadre.</p>
+      <p>L'accès et l'utilisation de l'Application sont soumis à l'acceptation et au respect des présentes CGU. En créant un compte ou en utilisant l'Application, l'Utilisateur accepte expressément et sans réserve les présentes CGU.</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">Article 2 : Accès à l'Application</h3>
+      <p>L'Application est actuellement proposée à titre gratuit, l'Éditeur se réservant le droit d'en modifier les conditions tarifaires à l'avenir. Tous les coûts afférents à l'accès, que ce soient les frais matériels, logiciels ou d'accès à internet sont exclusivement à la charge de l'Utilisateur.</p>
+      <p>L'accès à certaines fonctionnalités nécessite la création d'un compte utilisateur via le service d'authentification Google (Google OAuth). L'Utilisateur s'engage à fournir des informations exactes et à maintenir la confidentialité de ses identifiants de connexion.</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">Article 3 : Description du Service</h3>
+      <p>Aria OS est un outil professionnel d'aide à la création de contenu éditorial. Il permet notamment :</p>
+      <ul class="list-disc pl-5 space-y-2 mt-2">
+        <li>L'analyse de contenus textuels, d'articles ou de vidéos (via URL), etc.</li>
+        <li>La génération automatisée de documents, comme des scripts calibrés pour la voix-off, via notre intelligence artificielle.</li>
+        <li>L'utilisation d'un Studio d'enregistrement vidéo intégré (avec prompteur, gestion de prises, export vidéo, etc.).</li>
+        <li>La sauvegarde, l'historisation des processus, et le partage.</li>
+        <li>L'affichage éventuel de bannières publicitaires et de contenus promotionnels dans l'interface, etc.</li>
+      </ul>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">Article 4 : Propriété Intellectuelle et Droits d'Auteur</h3>
+      <p><strong>4.1. Droits sur l'Application :</strong> L'architecture de l'Application, les marques, logos, graphismes, logiciels, algorithmes et bases de données sont la propriété exclusive de Mmedia Universe et sont protégés par le droit de la propriété intellectuelle. La plateforme conserve tous les droits sur sa technologie, ses algorithmes et son interface.</p>
+      <p><strong>4.2. Marques tierces :</strong> Les marques et logos de tiers (tels que YouTube, Reuters, etc.) affichés sur l'Application appartiennent à leurs propriétaires respectifs. Ils sont utilisés uniquement à des fins d'illustration pour indiquer la compatibilité de notre outil avec ces plateformes. Mmedia Universe ne revendique aucune affiliation ni aucun droit sur ces marques.</p>
+      <p><strong>4.3. Droits sur les sources :</strong> L'Utilisateur s'engage à ne soumettre à l'Application que des URL ou des textes pour lesquels il dispose des droits nécessaires (droit d'auteur, droit de citation, domaine public). L'Éditeur décline toute responsabilité en cas d'analyse de contenus protégés soumis frauduleusement par l'Utilisateur.</p>
+      <p><strong>4.4. Droits sur les contenus générés :</strong> L'Utilisateur dispose du droit d'exploiter librement, intégralement et commercialement les scripts générés par l'Application. L'Éditeur ne revendique aucun droit d'auteur sur les textes finaux produits par l'Utilisateur via l'Application.</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">Article 5 : Responsabilité et Limites de l'IA</h3>
+      <p>L'Application s'appuie sur des modèles d'Intelligence Artificielle avancés pour analyser les sources fournies et structurer le contenu selon des formats optimisés pour la voix-off. Notre technologie combine ces modèles avec des processus d'analyse exclusifs pour garantir un rendu professionnel, sans que les détails de nos algorithmes internes ne soient publics. L'Utilisateur reconnaît que :</p>
+      <ul class="list-disc pl-5 space-y-2 mt-2">
+        <li>L'IA peut générer des informations inexactes, incomplètes ou obsolètes (phénomène d'hallucination).</li>
+        <li>Il est de la responsabilité exclusive de l'Utilisateur (en tant que créateur de contenu ou journaliste) de vérifier, fact-checker et valider les scripts avant toute publication ou enregistrement.</li>
+      </ul>
+      <p>Mmedia Universe ne pourra en aucun cas être tenu responsable des dommages directs ou indirects résultant de l'utilisation des scripts générés (diffamation, fake news, préjudice commercial).</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">Article 6 : Disponibilité du Service</h3>
+      <p>L'Éditeur s'efforce de maintenir l'Application accessible 24h/24 et 7j/7, mais n'est tenu à aucune obligation de résultat. L'Éditeur se réserve le droit de suspendre, d'interrompre ou de limiter l'accès à tout ou partie de l'Application pour des raisons de maintenance ou de mise à jour.</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">Article 7 : Modification des CGU</h3>
+      <p>Mmedia Universe se réserve le droit de modifier les présentes CGU à tout moment. Les Utilisateurs seront informés de toute modification substantielle. L'utilisation continue de l'Application après modification vaut acceptation des nouvelles CGU.</p>
+    `,
+    'legal.mentions.text': `
+      <h2 class="text-2xl font-bold text-black dark:text-white mb-2">Mentions Légales</h2>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">1. Éditeur de l'Application</h3>
+      <p>L'application <strong>Aria OS</strong> est éditée et exploitée par :</p>
+      <p class="mt-2">
+        <strong>Mmedia Universe</strong><br>
+        Mimongo, Gabon<br>
+        Capital social : 7.000.000 FCFA
+      </p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">2. Nous contacter</h3>
+      <p>
+        Téléphone : <strong>+241 66 17 10 36</strong><br>
+        Email : <strong>enjoymegabon&#64;gmail.com</strong>
+      </p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">3. Hébergement</h3>
+      <p>L'Application et ses bases de données sont hébergées par :</p>
+      <p class="mt-2">
+        <strong>Google Cloud Platform (GCP) / Firebase</strong><br>
+        Google Ireland Limited<br>
+        Gordon House, Barrow Street<br>
+        Dublin 4, Irlande
+      </p>
+    `,
+    'legal.privacy.text': `
+      <h2 class="text-2xl font-bold text-black dark:text-white mb-2">Politique de Confidentialité et Cookies</h2>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">1. Collecte des Données Personnelles</h3>
+      <p>Dans le cadre de l'utilisation de l'Application Aria OS, nous collectons les données suivantes :</p>
+      <ul class="list-disc pl-5 space-y-2 mt-2">
+        <li><strong>Données d'identification :</strong> Nom, prénom, adresse email et photo de profil (fournis par Google lors de la connexion OAuth).</li>
+        <li><strong>Données d'utilisation :</strong> Historique des scripts générés, URL soumises, textes analysés, paramètres de génération (ton, durée).</li>
+        <li><strong>Données techniques :</strong> Identifiants de connexion (UID Firebase).</li>
+      </ul>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">2. Finalité du Traitement</h3>
+      <p>Vos données sont traitées pour les finalités suivantes :</p>
+      <ul class="list-disc pl-5 space-y-2 mt-2">
+        <li>Fournir le service de génération de scripts.</li>
+        <li>Permettre la sauvegarde et la consultation de votre historique personnel.</li>
+        <li>Assurer la sécurité de l'Application et prévenir les abus (limitation des quotas).</li>
+        <li>Améliorer nos algorithmes de génération et nos offres (de manière anonymisée), etc.</li>
+      </ul>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">3. Conservation des Données</h3>
+      <p>Vos données d'identification et votre historique sont conservés tant que votre compte est actif. Vous disposez d'une fonctionnalité dans les paramètres de l'Application permettant de <strong>supprimer définitivement votre compte et l'intégralité de vos données</strong>. Une fois cette action effectuée, les données sont irrécupérables.</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">4. Partage des Données</h3>
+      <p>Vos données ne sont <strong>jamais vendues</strong> à des tiers. Elles sont partagées uniquement avec nos sous-traitants techniques strictement nécessaires au fonctionnement du service, et notamment :</p>
+      <ul class="list-disc pl-5 space-y-2 mt-2">
+        <li><strong>Google Firebase :</strong> Pour l'hébergement de la base de données et l'authentification.</li>
+        <li><strong>Google Gemini API :</strong> Les textes et URL que vous soumettez sont envoyés à l'API Gemini pour analyse de base. Ces données ne sont pas utilisées par Google pour entraîner ses modèles publics.</li>
+        <li><strong>ARIA OS (Agent IA) :</strong> L'intelligence artificielle interne qui agit comme une surcouche. Elle traite les données brutes pour en extraire des scripts hautement pertinents et calibrés, etc.</li>
+        <li><strong>Cakenews Labs :</strong> Entité de Mmedia Universe responsable du développement de l'architecture technique d'Aria OS. Ses équipes échangent des données avec l'agent ARIA OS, notamment dans le but d'alimenter et optimiser la plateforme d'information tierce Cakenews.</li>
+      </ul>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">5. Politique des Cookies</h3>
+      <p>L'Application Aria OS utilise des cookies et technologies similaires (Local Storage, Session Storage) de manière très limitée et <strong>uniquement pour des raisons techniques strictement nécessaires</strong> :</p>
+      <ul class="list-disc pl-5 space-y-2 mt-2">
+        <li><strong>Cookies d'authentification (Firebase Auth) :</strong> Permettent de maintenir votre session active sans avoir à vous reconnecter à chaque visite.</li>
+        <li><strong>Préférences locales :</strong> Sauvegarde de votre thème (clair/sombre).</li>
+      </ul>
+      <p><strong>Aucun cookie publicitaire ou de traçage tiers (type Google Analytics ou Meta Pixel) n'est utilisé sur cette Application.</strong> Par conséquent, aucun bandeau de consentement aux cookies n'est requis au sens de la réglementation (RGPD), les cookies techniques étant exemptés de consentement préalable.</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">6. Vos Droits</h3>
+      <p>Conformément à la réglementation applicable en matière de protection des données, vous disposez d'un droit d'accès, de rectification, de suppression et de portabilité de vos données. Pour exercer ces droits, vous pouvez utiliser les options de suppression dans l'Application ou nous contacter au numéro indiqué dans les Mentions Légales.</p>
+    `
+  },
+  en: {
+    'layout.generate': 'Generate',
+    'layout.scripts': 'Scripts',
+    'layout.videos': 'Videos',
+    'layout.inbox': 'Inbox',
+    'layout.me': 'Me',
+    'badge.scripts': 'Generated Scripts',
+    'common.cancel': 'Cancel',
+    'common.confirm': 'Confirm',
+    'common.back': 'Back',
+    'common.save': 'Save',
+    'common.saved': 'Saved',
+    'common.delete': 'Delete',
+    'common.close': 'Close',
+    'common.copy': 'Copy',
+    'common.download': 'Download',
+    'common.share': 'Share',
+    'common.loading': 'Loading...',
+
+    'settings.title': 'Profile & Settings',
+    'settings.desc': 'Manage your account and preferences.',
+    'settings.guest': 'Guest',
+    'settings.noAccount': 'No account mode',
+    'settings.generated': 'Generated',
+    'settings.logout': 'Sign out',
+    'settings.logout.title': 'Sign out?',
+    'settings.logout.desc': 'You will need to sign in again to access your scripts and preferences.',
+    'settings.deleteAccount': 'Delete my account',
+    'settings.delete.title': 'Delete account?',
+    'settings.delete.desc': 'This will schedule your account for deletion in 3 days. Your data will be irrecoverable.',
+    'settings.preferences': 'Preferences',
+    'settings.darkMode': 'Dark mode',
+    'settings.darkModeDesc': 'Invert interface colors',
+    'settings.language': 'Language',
+    'settings.languageDesc': 'Choose interface language',
+    'settings.contact': 'Contact Team',
+    'settings.cgu': 'Terms of Service',
+    'settings.about': 'About Aria OS',
+
+    // Settings Account & Modals
+    'settings.account.deleting': 'Deletion in progress...',
+    'settings.account.deletingDesc': 'Your account is being destroyed.',
+    'settings.account.scheduled': 'Scheduled deletion',
+    'settings.account.scheduledDesc': 'Your account will be permanently deleted on',
+    'settings.account.cancelDelete': 'Cancel deletion',
+    'settings.account.deleteAccount': 'Delete my account',
+    'settings.account.deleteWarning': 'A 3-day delay will be applied before permanent deletion.',
+    'settings.modal.logoutTitle': 'Log out?',
+    'settings.modal.logoutDesc': 'You will need to log back in to access your scripts and preferences.',
+    'settings.modal.deleteTitle': 'Delete account?',
+    'settings.modal.deleteDesc': 'This action will schedule your account for deletion in 3 days. Your data will be unrecoverable.',
+
+    'about.title': 'About',
+    'about.version': 'Version 4.0.0',
+    'about.desc': 'Aria OS is the next-gen media content workshop. It transforms any source into powerful scripts.',
+    'about.why': 'Why Aria OS?',
+    'about.whyDesc': 'The word Aria evokes an expressive melody. Aria OS helps you compose your own media score.',
+    'about.footer': 'Designed and developed by',
+
+    'legal.title': 'Legal Mentions & TOS',
+    'legal.tabs.cgu': 'General Terms',
+    'legal.tabs.mentions': 'Legal Mentions',
+    'legal.tabs.privacy': 'Privacy',
+    'legal.update': 'Last updated: April 14, 2026',
+
+    'history.title': 'History',
+    'history.desc': 'Find and manage your scripts.',
+    'history.search': 'Search...',
+    'history.sort.recent': 'Most Recent',
+    'history.sort.old': 'Oldest',
+    'history.sort.az': 'From A to Z',
+    'history.sort.za': 'From Z to A',
+    'history.tabs.active': 'Active',
+    'history.tabs.trash': 'Trash',
+    'history.empty': 'No scripts generated',
+    'history.emptyDesc': 'Your future creations will be listed here.',
+    'history.trash.empty': 'Trash is empty',
+    'history.trash.emptyDesc': 'Deleted items will appear here.',
+    'history.noResults': 'No results found',
+    'history.searchEmptyDesc': 'Try modifying your search.',
+    'history.customTitle': 'Custom title...',
+    'history.actions.trash': 'Move to trash',
+    'history.actions.restore': 'Restore',
+    'history.actions.deleteForever': 'Delete permanently',
+    'history.actions.delete': 'Delete',
+    'history.modal.details': 'Script Details',
+    'history.modal.studio': 'Studio',
+    'history.trash.confirmTitle': 'Move to trash?',
+    'history.trash.confirmDesc': 'This script will be moved to the trash and can be restored.',
+    'history.trash.hardConfirmTitle': 'Permanent deletion',
+    'history.trash.hardConfirmDesc': 'This action is irreversible. The script will be deleted forever.',
+
+    // Home
+    'home.ad1.badge': 'Beta Test',
+    'home.ad1.title': 'Monetize your content.',
+    'home.ad1.desc': 'Discover our exclusive partnership program for ARIAOS creators.',
+    'home.ad2.badge': 'New',
+    'home.ad2.title': 'Multi-Format Export',
+    'home.ad2.desc': 'Download your scripts in PDF, Word, and interactive Teleprompter format.',
+    'home.ad3.badge': 'Analysis',
+    'home.ad3.title': 'Understand the audience.',
+    'home.ad3.desc': 'New impact metrics available on your latest projects.',
+    'home.steps.load': 'Load',
+    'home.steps.config': 'Configure',
+    'home.steps.generate': 'Generate',
+    'home.source.title': 'Content source',
+    'home.source.desc': 'Paste a URL (YouTube, Article, Blog...) or raw text.',
+    'home.source.url': 'URL',
+    'home.source.rawText': 'Raw Text',
+    'home.source.placeholderUrl': 'https://...',
+    'home.source.placeholderText': 'Paste your text here...',
+    'home.source.errorUnsupported': 'This video platform is not supported. Only YouTube is compatible.',
+    'home.source.errorInvalid': 'Please enter a valid URL (e.g., https://...).',
+    'home.config.title': 'Configuration Assistant',
+    'home.config.desc': 'Let us guide you step by step to set up the perfect request.',
+    'home.config.q1': '1. What is the goal of this script?',
+    'home.config.q2': '2. What editorial tone should the AI adopt?',
+    'home.config.q3': '3. What should be my stance on the subject?',
+    'home.config.q4': '4. What is the target audio duration?',
+    'home.intentions.ana': 'Analyze',
+    'home.intentions.crit': 'Critique',
+    'home.intentions.expl': 'Explain',
+    'home.intentions.reph': 'Rephrase',
+    'home.intentions.deb': 'Debate',
+    'home.tones.fact': 'Factual (Neutral)',
+    'home.tones.punchy': 'Punchy (Dynamic)',
+    'home.tones.sat': 'Satirical',
+    'home.tones.insp': 'Inspiring',
+    'home.tones.ana': 'Analytical',
+    'home.tones.drama': 'Dramatic',
+    'home.stances.obj': 'Objective',
+    'home.stances.fav': 'Favorable (Praising)',
+    'home.stances.unfav': 'Unfavorable (Critical)',
+    'home.durations.sec': 'sec',
+    'home.durations.min': 'min',
+    'home.durations.30s': '30 sec',
+    'home.durations.1m': '1 min',
+    'home.durations.2m': '2 min',
+    'home.durations.3m': '3 min',
+    'home.durations.5m': '5 min',
+    'home.actions.continue': 'Continue',
+    'home.actions.back': 'Back',
+    'home.actions.generate': 'Generate',
+    'home.actions.copy': 'Copy',
+    'home.actions.download': 'Download',
+    'home.actions.new': 'New',
+    'home.actions.edit': 'Edit text',
+    'home.actions.preview': 'Pro Preview',
+    'home.actions.studio': 'Studio',
+    'home.actions.save': 'Save',
+    'home.actions.saved': 'Saved',
+    'home.actions.share': 'Share',
+    'home.meta.words': 'words',
+    'home.meta.author': 'Author',
+    'home.meta.anonAuthor': 'Anonymous Author',
+    'home.meta.generatedAt': 'Generated on',
+    'home.meta.at': 'at',
+    'home.meta.targetDuration': 'Target duration',
+    'home.meta.thinkingTime': 'Thinking time',
+    'home.meta.sourceText': 'Text source',
+    'home.meta.loadingDesc': 'Please wait, this may take a few seconds depending on the complexity and size of the source.',
+    'home.meta.writing': 'Writing...',
+    'home.meta.placeholderResult': 'Your script will appear here...',
+    'home.ad.goToSlide': 'Go to slide',
+    'home.loading.m1': 'Analyzing your data source...',
+    'home.loading.m2': 'Extracting content essence...',
+    'home.loading.m3': 'Structuring script narration...',
+    'home.loading.m4': 'Adjusting professional tone...',
+    'home.loading.m5': 'Polishing journalistic style...',
+    'home.loading.m6': 'Finalizing writing...',
+    'home.loading.d1': 'Generation is taking a bit longer than expected...',
+    'home.loading.d2': 'Complex analysis in progress...',
+    'home.loading.d3': 'Dense source, doubling our efforts...',
+    'home.loading.d4': 'Your internet connection might be slow...',
+    'home.loading.d5': 'Don\'t leave, data is in final assembly...',
+
+    // Studio
+    'studio.actions.quit': 'Quit',
+    'studio.actions.selectScript': 'Select a script',
+    'studio.permission.title': 'Permission required',
+    'studio.permission.desc': 'To film or record your voice, you must allow access to your camera and microphone.',
+    'studio.permission.activate': 'Activate camera',
+    'studio.mode.audio': 'Audio Mode Only',
+    'studio.actions.retake': 'Retake',
+    'studio.actions.saving': 'Saving...',
+    'studio.actions.save': 'Save',
+    'studio.settings.size': 'Size',
+    'studio.settings.speed': 'Speed',
+    'studio.settings.mask': 'Mask',
+    'studio.settings.shadow': 'Shadow',
+    'studio.actions.frontCam': 'Front Camera',
+    'studio.actions.rearCam': 'Rear Camera',
+    'studio.actions.audioOnly': 'Audio Only',
+    'studio.empty.title': 'No active script',
+    'studio.empty.desc': 'Add a generated script to the prompter to make your recording easier and improve your speech.',
+    'studio.empty.browse': 'Browse my scripts',
+    'studio.selector.title': 'Select a script',
+    'studio.selector.empty': 'No scripts available',
+    'studio.selector.emptyDesc': 'You haven\'t generated any scripts yet.',
+    'studio.selector.create': 'Create a script',
+    'studio.selector.loadMore': 'Load more scripts',
+
+    // Videos
+    'videos.hero.new': 'New Recording',
+    'videos.hero.desc': 'Open the recording studio',
+    'videos.title': 'My Videos',
+    'videos.desc': 'Find and manage your recordings.',
+    'videos.empty': 'No videos found',
+    'videos.emptyDesc': 'Try modifying your search or head to the Studio to record one!',
+    'videos.actions.pin': 'Pin',
+    'videos.actions.unpin': 'Unpin',
+    'videos.actions.rename': 'Click to rename',
+    'videos.actions.whatsapp': 'Share on WhatsApp',
+    'videos.actions.emptyTrash': 'Empty trash',
+    'videos.scriptModal.title': 'Video Script',
+    'videos.loadMore': 'Load more videos',
+
+    // Source Viewer
+    'source.videoPlayer': 'Video Player',
+    'source.browser': 'Internal Browser',
+    'source.openNewTab': 'Open in new tab',
+
+    // Notifications
+    'notif.title': 'Notifications',
+    'notif.desc': 'Stay informed about updates.',
+    'notif.empty': 'No notifications',
+    'notif.emptyDesc': "You're all caught up! New announcements will appear here.",
+    'notif.actions.markAsRead': 'Mark as read',
+    'notif.actions.delete': 'Delete',
+    'notif.actions.deleteConfirm': 'Are you sure you want to delete this notification?',
+
+    'login.welcome': 'Welcome to',
+    'login.desc': 'Sign in to instantly transform your sources into powerful video scripts.',
+    'login.google': 'Continue with Google',
+    'login.anonymous': 'Try as Guest',
+    'login.anonymousWarn': 'Guest mode is temporary. Saving is disabled.',
+    'login.cgu': 'By signing in, you agree to our TOS.',
+
+    // Legal Content
+    'legal.cgu.text': `
+      <h2 class="text-2xl font-bold text-black dark:text-white mb-2">Terms and Conditions of Use (TCU)</h2>
+      <p class="text-gray-500 mb-8">Last updated: April 14, 2026</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">Article 1: Purpose</h3>
+      <p>The following Terms and Conditions of Use (hereinafter "TCU") define the terms and conditions under which the company Mmedia Universe (hereinafter "the Publisher") provides users (hereinafter "the User") with the Aria OS application (hereinafter "the Application"), as well as the rights and obligations of the parties in this context.</p>
+      <p>Access to and use of the Application are subject to the acceptance of and compliance with these TCU. By creating an account or using the Application, the User expressly and unreservedly accepts these TCU.</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">Article 2: Access to the Application</h3>
+      <p>The Application is currently offered free of charge, with the Publisher reserving the right to modify pricing conditions in the future. All costs related to access, whether hardware, software, or internet access fees, are exclusively the responsibility of the User.</p>
+      <p>Access to certain features requires the creation of a user account via the Google authentication service (Google OAuth). The User agrees to provide accurate information and to maintain the confidentiality of their login credentials.</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">Article 3: Service Description</h3>
+      <p>Aria OS is a professional tool helping in the creation of editorial content. It notably allows:</p>
+      <ul class="list-disc pl-5 space-y-2 mt-2">
+        <li>Analysis of text content, articles, or videos (via URL), etc.</li>
+        <li>Automated generation of documents, such as calibrated scripts for voice-over, via our artificial intelligence.</li>
+        <li>Use of an integrated video recording studio (with teleprompter, take management, video export, etc.).</li>
+        <li>Saving, history tracking of processes, and sharing.</li>
+        <li>Potential display of advertising banners and promotional content in the interface, etc.</li>
+      </ul>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">Article 4: Intellectual Property and Copyright</h3>
+      <p><strong>4.1. Rights to the Application:</strong> The Application's architecture, trademarks, logos, graphics, software, algorithms, and databases are the exclusive property of Mmedia Universe and are protected by intellectual property law. The platform retains all rights to its technology, algorithms, and interface.</p>
+      <p><strong>4.2. Third-party Trademarks:</strong> Trademarks and logos of third parties (such as YouTube, Reuters, etc.) displayed on the Application belong to their respective owners. They are used solely for illustration purposes to indicate the compatibility of our tool with these platforms. Mmedia Universe claims no affiliation or rights to these trademarks.</p>
+      <p><strong>4.3. Rights in Sources:</strong> The User agrees to submit only URLs or texts to the Application for which they have the necessary rights (copyright, right of citation, public domain). The Publisher declines any responsibility in case of analysis of protected content fraudulently submitted by the User.</p>
+      <p><strong>4.4. Rights in Generated Content:</strong> The User has the right to freely, fully, and commercially exploit the scripts generated by the Application. The Publisher claims no copyright on the final texts produced by the User via the Application.</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">Article 5: Liability and IA Limits</h3>
+      <p>The Application relies on advanced Artificial Intelligence models to analyze provided sources and structure content according to optimized formats for voice-over. Our technology combines these models with exclusive analysis processes to ensure a professional result, without the details of our internal algorithms being public. The User acknowledges that:</p>
+      <ul class="list-disc pl-5 space-y-2 mt-2">
+        <li>AI can generate inaccurate, incomplete, or obsolete information (hallucination phenomenon).</li>
+        <li>It is the sole responsibility of the User (as a content creator or journalist) to verify, fact-check, and validate scripts before any publication or recording.</li>
+      </ul>
+      <p>Mmedia Universe shall in no case be held liable for direct or indirect damages resulting from the use of generated scripts (defamation, fake news, commercial prejudice).</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">Article 6: Service Availability</h3>
+      <p>The Publisher endeavors to keep the Application accessible 24/7 but is bound by no obligation of result. The Publisher reserves the right to suspend, interrupt, or limit access to all or part of the Application for maintenance or update reasons.</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">Article 7: TCU Modification</h3>
+      <p>Mmedia Universe reserves the right to modify these TCU at any time. Users will be informed of any substantial modification. Continued use of the Application after modification constitutes acceptance of the new TCU.</p>
+    `,
+    'legal.mentions.text': `
+      <h2 class="text-2xl font-bold text-black dark:text-white mb-2">Legal Mentions</h2>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">1. Application Publisher</h3>
+      <p>The <strong>Aria OS</strong> application is published and operated by:</p>
+      <p class="mt-2">
+        <strong>Mmedia Universe</strong><br>
+        Mimongo, Gabon<br>
+        Share Capital: 7,000,000 FCFA
+      </p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">2. Contact Us</h3>
+      <p>
+        Phone: <strong>+241 66 17 10 36</strong><br>
+        Email: <strong>enjoymegabon&#64;gmail.com</strong>
+      </p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">3. Hosting</h3>
+      <p>The Application and its databases are hosted by:</p>
+      <p class="mt-2">
+        <strong>Google Cloud Platform (GCP) / Firebase</strong><br>
+        Google Ireland Limited<br>
+        Gordon House, Barrow Street<br>
+        Dublin 4, Ireland
+      </p>
+    `,
+    'legal.privacy.text': `
+      <h2 class="text-2xl font-bold text-black dark:text-white mb-2">Privacy Policy and Cookies</h2>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">1. Personal Data Collection</h3>
+      <p>Within the use of the Aria OS Application, we collect the following data:</p>
+      <ul class="list-disc pl-5 space-y-2 mt-2">
+        <li><strong>Identity Data:</strong> First name, last name, email address, and profile picture (provided by Google during OAuth login).</li>
+        <li><strong>Usage Data:</strong> History of generated scripts, submitted URLs, analyzed texts, generation parameters (tone, duration).</li>
+        <li><strong>Technical Data:</strong> Login identifiers (Firebase UID).</li>
+      </ul>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">2. Processing Purpose</h3>
+      <p>Your data is processed for the following purposes:</p>
+      <ul class="list-disc pl-5 space-y-2 mt-2">
+        <li>Provide the script generation service.</li>
+        <li>Enable saving and consultation of your personal history.</li>
+        <li>Ensure Application security and prevent abuse (quota limitation).</li>
+        <li>Improve our generation algorithms and offerings (anonymized), etc.</li>
+      </ul>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">3. Data Retention</h3>
+      <p>Your identity data and history are kept as long as your account is active. You have a feature in the Application settings allowing you to <strong>permanently delete your account and all your data</strong>. Once this action is performed, data is unrecoverable.</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">4. Data Sharing</h3>
+      <p>Your data is <strong>never sold</strong> to third parties. It is shared only with our technical subcontractors strictly necessary for the service's operation, and notably:</p>
+      <ul class="list-disc pl-5 space-y-2 mt-2">
+        <li><strong>Google Firebase:</strong> For database hosting and authentication.</li>
+        <li><strong>Google Gemini API:</strong> The texts and URLs you submit are sent to the Gemini API for basic analysis. This data is not used by Google to train its public models.</li>
+        <li><strong>ARIA OS (AI Agent):</strong> The internal artificial intelligence that acts as an overlay. It processes raw data to extract highly relevant and calibrated scripts, etc.</li>
+        <li><strong>Cakenews Labs:</strong> Mmedia Universe entity responsible for the technical architecture development of Aria OS. Its teams exchange data with the ARIA OS agent, notably to power and optimize the third-party news platform Cakenews.</li>
+      </ul>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">5. Cookie Policy</h3>
+      <p>The Aria OS Application uses cookies and similar technologies (Local Storage, Session Storage) in a very limited way and <strong>only for strictly necessary technical reasons</strong>:</p>
+      <ul class="list-disc pl-5 space-y-2 mt-2">
+        <li><strong>Authentication Cookies (Firebase Auth):</strong> Allow keeping your session active without having to reconnect at each visit.</li>
+        <li><strong>Local Preferences:</strong> Saving your theme (light/dark).</li>
+      </ul>
+      <p><strong>No advertising or third-party tracking cookies (type Google Analytics or Meta Pixel) are used on this Application.</strong> Consequently, no cookie consent banner is required under regulations (GDPR), technical cookies being exempt from prior consent.</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">6. Your Rights</h3>
+      <p>In accordance with applicable data protection regulations, you have a right of access, rectification, erasure, and portability of your data. To exercise these rights, you can use the deletion options in the Application or contact us at the number indicated in the Legal Mentions.</p>
+    `
+  },
+  ar: {
+    'layout.generate': 'توليد',
+    'layout.scripts': 'النصوص',
+    'layout.videos': 'فيديوهات',
+    'layout.inbox': 'صندوق الوارد',
+    'layout.me': 'أنا',
+    'badge.scripts': 'النصوص المُنشأة',
+    'common.cancel': 'إلغاء',
+    'common.confirm': 'تأكيد',
+    'common.back': 'رجوع',
+    'common.save': 'حفظ',
+    'common.saved': 'تم الحفظ',
+    'common.delete': 'حذف',
+    'common.close': 'إغلاق',
+    'common.copy': 'نسخ',
+    'common.download': 'تحميل',
+    'common.share': 'مشاركة',
+    'common.loading': 'جاري التحميل...',
+
+    'settings.title': 'الملف الشخصي والإعدادات',
+    'settings.desc': 'إدارة حسابك وتفضيلاتك.',
+    'settings.guest': 'زائر',
+    'settings.noAccount': 'وضع بدون حساب',
+    'settings.generated': 'تم الإنشاء',
+    'settings.logout': 'تسجيل الخروج',
+    'settings.logout.title': 'تسجيل الخروج؟',
+    'settings.logout.desc': 'ستحتاج إلى تسجيل الدخول مرة أخرى للوصول إلى نصوصك وتفضيلاتك.',
+    'settings.deleteAccount': 'حذف حسابي',
+    'settings.delete.title': 'حذف الحساب؟',
+    'settings.delete.desc': 'سيؤدي هذا إلى جدولة حذف حسابك خلال 3 أيام. ستكون بياناتك غير قابلة للاستعادة.',
+    'settings.preferences': 'التفضيلات',
+    'settings.darkMode': 'الوضع الداكن',
+    'settings.darkModeDesc': 'قلب ألوان الواجهة',
+    'settings.language': 'اللغة',
+    'settings.languageDesc': 'اختر لغة الواجهة',
+    'settings.contact': 'اتصل بالفريق',
+    'settings.cgu': 'شروط الاستخدام',
+    'settings.about': 'حول Aria OS',
+
+    // Settings Account & Modals
+    'settings.account.deleting': 'جاري الحذف...',
+    'settings.account.deletingDesc': 'يتم الآن تدمير حسابك.',
+    'settings.account.scheduled': 'حذف مقرر',
+    'settings.account.scheduledDesc': 'سيتم حذف حسابك نهائياً في',
+    'settings.account.cancelDelete': 'إلغاء الحذف',
+    'settings.account.deleteAccount': 'حذف حسابي',
+    'settings.account.deleteWarning': 'سيتم تطبيق مهلة لمدة 3 أيام قبل الحذف النهائي.',
+    'settings.modal.logoutTitle': 'تسجيل الخروج؟',
+    'settings.modal.logoutDesc': 'ستحتاج إلى تسجيل الدخول مرة أخرى للوصول إلى النصوص والتفضيلات الخاصة بك.',
+    'settings.modal.deleteTitle': 'حذف الحساب؟',
+    'settings.modal.deleteDesc': 'سيؤدي هذا الإجراء إلى جدولة حذف حسابك في غضون 3 أيام. ستكون بياناتك غير قابلة للاسترداد.',
+
+    'about.title': 'حول',
+    'about.version': 'الإصدار 4.0.0',
+    'about.desc': 'Aria OS هو ورشة محتوى إعلامي من الجيل الجديد. يحول أي مصدر إلى نصوص قوية.',
+    'about.why': 'لماذا Aria OS؟',
+    'about.whyDesc': 'كلمة Aria توحي بلحن معبر. يساعدك Aria OS على تأليف مقطوعتك الإعلامية الخاصة.',
+    'about.footer': 'تم التصميم والتطوير بواسطة',
+
+    'legal.title': 'إشعارات قانونية وشروط الاستخدام',
+    'legal.tabs.cgu': 'الشروط العامة',
+    'legal.tabs.mentions': 'إشعارات قانونية',
+    'legal.tabs.privacy': 'الخصوصية',
+    'legal.update': 'آخر تحديث: 14 أبريل 2026',
+
+    'history.title': 'السجل',
+    'history.desc': 'ابحث عن نصوصك وأدرها.',
+    'history.search': 'بحث...',
+    'history.sort.recent': 'الأحدث',
+    'history.sort.old': 'الأقدم',
+    'history.sort.az': 'من أ إلى ي',
+    'history.sort.za': 'من ي إلى أ',
+    'history.tabs.active': 'نشط',
+    'history.tabs.trash': 'السلة',
+    'history.empty': 'لم يتم إنشاء أي نصوص',
+    'history.emptyDesc': 'ستظهر إبداعاتك المستقبلية هنا.',
+    'history.trash.empty': 'السلة فارغة',
+    'history.trash.emptyDesc': 'ستظهر العناصر المحذوفة هنا.',
+    'history.noResults': 'لا توجد نتائج',
+    'history.searchEmptyDesc': 'حاول تعديل بحثك.',
+    'history.customTitle': 'عنوان مخصص...',
+    'history.actions.trash': 'نقل إلى السلة',
+    'history.actions.restore': 'استعادة',
+    'history.actions.deleteForever': 'حذف نهائي',
+    'history.actions.delete': 'حذف',
+    'history.modal.details': 'تفاصيل النص',
+    'history.modal.studio': 'الاستوديو',
+    'history.trash.confirmTitle': 'نقل إلى السلة؟',
+    'history.trash.confirmDesc': 'سيتم نقل هذا النص إلى السلة ويمكن استعادته.',
+    'history.trash.hardConfirmTitle': 'حذف نهائي',
+    'history.trash.hardConfirmDesc': 'هذا الإجراء غير قابل للتراجع. سيتم حذف النص للأبد.',
+
+    // Home
+    'home.ad1.badge': 'الاختبار التجريبي',
+    'home.ad1.title': 'استثمر المحتوى الخاص بك.',
+    'home.ad1.desc': 'اكتشف برنامج الشراكة الحصري لمبدعي ARIAOS.',
+    'home.ad2.badge': 'جديد',
+    'home.ad2.title': 'تصدير بصيغ متعددة',
+    'home.ad2.desc': 'قم بتحميل النصوص الخاصة بك بصيغ PDF و Word وتنسيق الملقن التفاعلي.',
+    'home.ad3.badge': 'تحليل',
+    'home.ad3.title': 'افهم الجمهور.',
+    'home.ad3.desc': 'مقاييس تأثير جديدة متاحة لمشاريعك الأخيرة.',
+    'home.steps.load': 'تحميل',
+    'home.steps.config': 'إعداد',
+    'home.steps.generate': 'إنشاء',
+    'home.source.title': 'مصدر المحتوى',
+    'home.source.desc': 'انصق رابطاً (يوتيوب، مقال، مدونة...) أو نصاً خاماً.',
+    'home.source.url': 'رابط',
+    'home.source.rawText': 'نص خام',
+    'home.source.placeholderUrl': 'https://...',
+    'home.source.placeholderText': 'انصق نصك هنا...',
+    'home.source.errorUnsupported': 'منصة الفيديو هذه غير مدعومة. يوتيوب هو المتوافق فقط.',
+    'home.source.errorInvalid': 'يرجى إدخال رابط صحيح (مثلاً: https://...).',
+    'home.config.title': 'مساعد الإعداد',
+    'home.config.desc': 'دعنا نوجهك خطوة بخطوة لإعداد المطلب المثالي.',
+    'home.config.q1': '1. ما هو الهدف من هذا النص؟',
+    'home.config.q2': '2. ما هو النبرة التحريرية التي يجب أن يتبناها الذكاء الاصطناعي؟',
+    'home.config.q3': '3. ما هو موقفي من الموضوع؟',
+    'home.config.q4': '4. ما هي مدة الصوت المستهدفة؟',
+    'home.intentions.ana': 'تحليل',
+    'home.intentions.crit': 'نقد',
+    'home.intentions.expl': 'شرح',
+    'home.intentions.reph': 'إعادة صياغة',
+    'home.intentions.deb': 'مناظرة',
+    'home.tones.fact': 'واقعي (محايد)',
+    'home.tones.punchy': 'قوي (ديناميكي)',
+    'home.tones.sat': 'ساخر',
+    'home.tones.insp': 'ملهم',
+    'home.tones.ana': 'تحليلي',
+    'home.tones.drama': 'درامي',
+    'home.stances.obj': 'موضوعي',
+    'home.stances.fav': 'إيجابي (مادح)',
+    'home.stances.unfav': 'سلبي (منتقد)',
+    'home.durations.sec': 'ثانية',
+    'home.durations.min': 'دقيقة',
+    'home.durations.30s': '30 ثانية',
+    'home.durations.1m': '1 دقيقة',
+    'home.durations.2m': '2 دقيقة',
+    'home.durations.3m': '3 دقيقة',
+    'home.durations.5m': '5 دقيقة',
+    'home.actions.continue': 'استمرار',
+    'home.actions.back': 'رجوع',
+    'home.actions.generate': 'إنشاء',
+    'home.actions.copy': 'نسخ',
+    'home.actions.download': 'تحميل',
+    'home.actions.new': 'جديد',
+    'home.actions.edit': 'تعديل النص',
+    'home.actions.preview': 'معاينة احترافية',
+    'home.actions.studio': 'استوديو',
+    'home.actions.save': 'حفظ',
+    'home.actions.saved': 'تم الحفظ',
+    'home.actions.share': 'مشاركة',
+    'home.meta.words': 'كلمة',
+    'home.meta.author': 'المؤلف',
+    'home.meta.anonAuthor': 'مؤلف مجهول',
+    'home.meta.generatedAt': 'تم الإنشاء في',
+    'home.meta.at': 'في الساعة',
+    'home.meta.targetDuration': 'المدة المستهدفة',
+    'home.meta.thinkingTime': 'وقت التفكير',
+    'home.meta.sourceText': 'مصدر نصي',
+    'home.meta.loadingDesc': 'يرجى الانتظار، قد يستغرق هذا بضع ثوانٍ حسب تعقيد وحجم المصدر.',
+    'home.meta.writing': 'جاري الكتابة...',
+    'home.meta.placeholderResult': 'سيظهر النص الخاص بك هنا...',
+    'home.ad.goToSlide': 'انتقل إلى الشريحة',
+    'home.loading.m1': 'جاري تحليل مصدر بياناتك...',
+    'home.loading.m2': 'جاري استخراج جوهر المحتوى...',
+    'home.loading.m3': 'جاري هيكلة سرد النص...',
+    'home.loading.m4': 'جاري ضبط النبرة المهنية...',
+    'home.loading.m5': 'جاري صقل الأسلوب الصحفي...',
+    'home.loading.m6': 'جاري اللمسات النهائية للكتابة...',
+    'home.loading.d1': 'الإنشاء يستغرق وقتاً أطول قليلاً من المتوقع...',
+    'home.loading.d2': 'جاري معالجة تحليلات معقدة...',
+    'home.loading.d3': 'المصدر كثيف، نحن نضاعف جهودنا...',
+    'home.loading.d4': 'قد يكون اتصالك بالإنترنت بطيئاً...',
+    'home.loading.d5': 'لا تغادر، البيانات في مرحلة التجميع النهائي...',
+
+    // Studio
+    'studio.actions.quit': 'خروج',
+    'studio.actions.selectScript': 'اختر نصاً',
+    'studio.permission.title': 'الإذن مطلوب',
+    'studio.permission.desc': 'لتصوير أو تسجيل صوتك، يجب عليك السماح بالوصول إلى الكاميرا والميكروفون.',
+    'studio.permission.activate': 'تفعيل الكاميرا',
+    'studio.mode.audio': 'وضع الصوت فقط',
+    'studio.actions.retake': 'إعادة المحاولة',
+    'studio.actions.saving': 'جاري الحفظ...',
+    'studio.actions.save': 'حفظ',
+    'studio.settings.size': 'الحجم',
+    'studio.settings.speed': 'السرعة',
+    'studio.settings.mask': 'القناع',
+    'studio.settings.shadow': 'الظل',
+    'studio.actions.frontCam': 'الكاميرا الأمامية',
+    'studio.actions.rearCam': 'الكاميرا الخلفية',
+    'studio.actions.audioOnly': 'صوت فقط',
+    'studio.empty.title': 'لا يوجد نص نشط',
+    'studio.empty.desc': 'أضف نصاً مُنشأً إلى الملقن لتسهيل التسجيل وتحسين إلقائك.',
+    'studio.empty.browse': 'تصفح نصوصي',
+    'studio.selector.title': 'اختر نصاً',
+    'studio.selector.empty': 'لا توجد نصوص متاحة',
+    'studio.selector.emptyDesc': 'لم تقم بإنشاء أي نصوص بعد.',
+    'studio.selector.create': 'إنشاء نص',
+    'studio.selector.loadMore': 'تحميل المزيد',
+
+    // Videos
+    'videos.hero.new': 'تسجيل جديد',
+    'videos.hero.desc': 'افتح استوديو التسجيل',
+    'videos.title': 'فيديوهاتي',
+    'videos.desc': 'ابحث عن تسجيلاتك وأدرها.',
+    'videos.empty': 'لم يتم العثور على فيديوهات',
+    'videos.emptyDesc': 'حاول تعديل بحثك أو اذهب إلى الاستوديو لتسجيل فيديو!',
+    'videos.actions.pin': 'تثبيت',
+    'videos.actions.unpin': 'إلغاء التثبيت',
+    'videos.actions.rename': 'انقر لإعادة التسمية',
+    'videos.actions.whatsapp': 'مشاركة عبر واتساب',
+    'videos.actions.emptyTrash': 'إفراغ السلة',
+    'videos.scriptModal.title': 'نص الفيديو',
+    'videos.loadMore': 'تحميل المزيد من الفيديوهات',
+
+    // Source Viewer
+    'source.videoPlayer': 'مشغل الفيديو',
+    'source.browser': 'المتصفح الداخلي',
+    'source.openNewTab': 'فتح في علامة تبويب جديدة',
+
+    // Notifications
+    'notif.title': 'الإشعارات',
+    'notif.desc': 'كن على اطلاع بآخر التحديثات.',
+    'notif.empty': 'لا توجد إشعارات',
+    'notif.emptyDesc': 'كل شيء محدث! ستظهر الإعلانات الجديدة هنا.',
+    'notif.actions.markAsRead': 'تحديد كمقروء',
+    'notif.actions.delete': 'حذف',
+    'notif.actions.deleteConfirm': 'هل أنت متأكد من رغبتك في حذف هذا الإشعار؟',
+
+    'login.welcome': 'مرحباً بكم في',
+    'login.desc': 'سجل الدخول لتحويل مصادرك فوراً إلى نصوص فيديو قوية.',
+    'login.google': 'المتابعة باستخدام Google',
+    'login.anonymous': 'تجربة كضيف',
+    'login.anonymousWarn': 'وضع الضيف مؤقت. الحفظ معطل.',
+    'login.cgu': 'بتسجيل الدخول، فإنك توافق على شروط الاستخدام الخاصة بنا.',
+
+    'legal.cgu.text': `
+      <h2 class="text-2xl font-bold text-black dark:text-white mb-2">شروط وأحكام الاستخدام (CGU)</h2>
+      <p class="text-gray-500 mb-8">آخر تحديث: 14 أبريل 2026</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">المادة 1: الغرض</h3>
+      <p>تهدف شروط وأحكام الاستخدام الحالية (المشار إليها فيما يلي بـ "شروط الاستخدام") إلى تحديد القواعد والظروف التي تضع بموجبها شركة Mmedia Universe (المشار إليها فيما يلي بـ "الناشر") تطبيق Aria OS (المشار إليه فيما يلي بـ "التطبيق") تحت تصرف المستخدمين (المشار إليهم فيما يلي بـ "المستخدم")، بالإضافة إلى حقوق والتزامات الأطراف في هذا الإطار.</p>
+      <p>يخضع الوصول إلى التطبيق واستخدامه لقبول والامتثال لشروط الاستخدام هذه. من خلال إنشاء حساب أو استخدام التطبيق، يوافق المستخدم صراحةً وبدون تحفظ على شروط الاستخدام هذه.</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">المادة 2: الوصول إلى التطبيق</h3>
+      <p>يتم تقديم التطبيق حاليًا مجانًا، مع احتفاظ الناشر بالحق في تعديل شروط التسعير في المستقبل. جميع التكاليف المتعلقة بالوصول، سواء كانت تكاليف الأجهزة أو البرمجيات أو رسوم الوصول إلى الإنترنت، تقع على عاتق المستخدم حصريًا.</p>
+      <p>يتطلب الوصول إلى بعض الميزات إنشاء حساب مستخدم عبر خدمة مصادقة Google (Google OAuth). يوافق المستخدم على تقديم معلومات دقيقة والحفاظ على سرية بيانات اعتماد تسجيل الدخول الخاصة به.</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">المادة 3: وصف الخدمة</h3>
+      <p>Aria OS هو أداة احترافية للمساعدة في إنشاء المحتوى التحريري. يتيح بشكل خاص:</p>
+      <ul class="list-disc pr-5 space-y-2 mt-2">
+        <li>تحليل محتوى النصوص أو المقالات أو الفيديوهات (عبر الرابط)، إلخ.</li>
+        <li>الإنشاء التلقائي للوثائق، مثل النصوص المعايرة للتعليق الصوتي، عبر ذكائنا الاصطناعي.</li>
+        <li>استخدام استوديو تسجيل فيديو متكامل (مع ملقن، إدارة اللقطات، تصدير الفيديو، إلخ).</li>
+        <li>الحفظ، وتتبع تاريخ العمليات، والمشاركة.</li>
+        <li>العرض المحتمل للافتات الإعلانية والمحتوى الترويجي في الواجهة، إلخ.</li>
+      </ul>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">المادة 4: الملكية الفكرية وحقوق التأليف</h3>
+      <p><strong>4.1. حقوق التطبيق:</strong> هندسة التطبيق، والعلامات التجارية، والشعارات، والرسوميات، والبرمجيات، والخوارزميات، وقواعد البيانات هي ملكية حصرية لشركة Mmedia Universe ومحمية بموجب قوانين الملكية الفكرية. تحتفظ المنصة بجميع الحقوق في تقنيتها وخوارزمياتها وواجهتها.</p>
+      <p><strong>4.2. العلامات التجارية للغير:</strong> العلامات التجارية والشعارات الخاصة بأطراف ثالثة (مثل YouTube وReuters وغيرها) المعروضة على التطبيق تعود لأصحابها المعنيين. يتم استخدامها فقط لأغراض التوضيح للإشارة إلى توافق أداتنا مع هذه المنصات. لا تدعي Mmedia Universe أي انتماء أو حقوق في هذه العلامات التجارية.</p>
+      <p><strong>4.3. الحقوق في المصادر:</strong> يوافق المستخدم على عدم تقديم سوى الروابط أو النصوص التي يمتلك الحقوق اللازمة لها (حقوق التأليف، حق الاقتباس، الملك العام). يخلي الناشر مسؤوليته في حالة تحليل محتوى محمي قدمه المستخدم بشكل غير قانوني.</p>
+      <p><strong>4.4. الحقوق في المحتوى المُنشأ:</strong> للمستخدم الحق في استغلال النصوص المُنشأة بواسطة التطبيق بحرية وبشكل كامل وتجاري. لا يدعي الناشر أي حقوق تأليف على النصوص النهائية التي ينتجها المستخدم عبر التطبيق.</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">المادة 5: المسؤولية وحدود الذكاء الاصطناعي</h3>
+      <p>يعتمد التطبيق على نماذج ذكاء اصطناعي متقدمة لتحليل المصادر المقدمة وهيكلة المحتوى وفقًا لتنسيقات محسنة للتعليق الصوتي. تجمع تقنيتنا بين هذه النماذج وعمليات تحليل حصرية لضمان نتيجة احترافية، دون أن تكون تفاصيل خوارزمياتنا الداخلية علنية. يقر المستخدم بما يلي:</p>
+      <ul class="list-disc pr-5 space-y-2 mt-2">
+        <li>يمكن للذكاء الاصطناعي توليد معلومات غير دقيقة أو غير كاملة أو قديمة (ظاهرة الهلوسة).</li>
+        <li>تقع على عاتق المستخدم وحده (كصانع محتوى أو صحفي) مسؤولية التحقق من النصوص وتدقيقها واعتمادها قبل أي نشر أو تسجيل.</li>
+      </ul>
+      <p>لن تكون Mmedia Universe مسؤولة بأي حال من الأحوال عن الأضرار المباشرة أو غير المباشرة الناتجة عن استخدام النصوص المُنشأة (التشهير، الأخبار المزيفة، الضرر التجاري).</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">المادة 6: توفر الخدمة</h3>
+      <p>يسعى الناشر للحفاظ على إمكانية الوصول إلى التطبيق على مدار الساعة وطوال أيام الأسبوع، ولكنه غير ملزم بتحقيق نتيجة محددة. يحتفظ الناشر بالحق في تعليق أو قطع أو تقييد الوصول إلى كل أو جزء من التطبيق لأسباب تتعلق بالصيانة أو التحديث.</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">المادة 7: تعديل شروط الاستخدام</h3>
+      <p>تحتفظ Mmedia Universe بالحق في تعديل شروط الاستخدام الحالية في أي وقت. سيتم إبلاغ المستخدمين بأي تعديل جوهري. يعتبر الاستمرار في استخدام التطبيق بعد التعديل قبولًا لشروط الاستخدام الجديدة.</p>
+    `,
+    'legal.mentions.text': `
+      <h2 class="text-2xl font-bold text-black dark:text-white mb-2">إشعارات قانونية</h2>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">1. ناشر التطبيق</h3>
+      <p>يتم إصدار وتشغيل تطبيق <strong>Aria OS</strong> من قبل:</p>
+      <p class="mt-2">
+        <strong>Mmedia Universe</strong><br>
+        ميمونغو، الغابون<br>
+        رأس مال الشركة: 7,000,000 فرنك أفريقي
+      </p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">2. اتصل بنا</h3>
+      <p>
+        الهاتف: <strong>+241 66 17 10 36</strong><br>
+        البريد الإلكتروني: <strong>enjoymegabon&#64;gmail.com</strong>
+      </p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">3. الاستضافة</h3>
+      <p>يتم استضافة التطبيق وقواعد بياناته من قبل:</p>
+      <p class="mt-2">
+        <strong>Google Cloud Platform (GCP) / Firebase</strong><br>
+        Google Ireland Limited<br>
+        Gordon House, Barrow Street<br>
+        Dublin 4, Ireland
+      </p>
+    `,
+    'legal.privacy.text': `
+      <h2 class="text-2xl font-bold text-black dark:text-white mb-2">سياسة الخصوصية وملفات تعريف الارتباط</h2>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">1. جمع البيانات الشخصية</h3>
+      <p>كجزء من استخدام تطبيق Aria OS، نقوم بجمع البيانات التالية:</p>
+      <ul class="list-disc pr-5 space-y-2 mt-2">
+        <li><strong>بيانات الهوية:</strong> الاسم الأول، اسم العائلة، عنوان البريد الإلكتروني، وصورة الملف الشخصي (المقدمة من Google أثناء تسجيل الدخول عبر OAuth).</li>
+        <li><strong>بيانات الاستخدام:</strong> تاريخ النصوص المُنشأة، الروابط المقدمة، النصوص المحللة، معلمات الإنشاء (النغمة، المدة).</li>
+        <li><strong>البيانات التقنية:</strong> معرفات تسجيل الدخول (UID Firebase).</li>
+      </ul>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">2. غرض المعالجة</h3>
+      <p>تتم معالجة بياناتكم للأغراض التالية:</p>
+      <ul class="list-disc pr-5 space-y-2 mt-2">
+        <li>تقديم خدمة إنشاء النصوص.</li>
+        <li>تمكين الحفظ والرجوع إلى تاريخكم الشخصي.</li>
+        <li>ضمان أمن التطبيق ومنع إساءة الاستخدام (تقييد الحصص).</li>
+        <li>تحسين خوارزميات الإنشاء وعروضنا (بشكل مجهول)، إلخ.</li>
+      </ul>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">3. الاحتفاظ بالبيانات</h3>
+      <p>يتم الاحتفاظ ببيانات الهوية والتاريخ الخاص بكم طالما أن حسابكم نشط. تتوفر ميزة في إعدادات التطبيق تتيح لكم <strong>حذف حسابكم وجميع بياناتكم نهائيًا</strong>. بمجرد تنفيذ هذا الإجراء، لا يمكن استعادة البيانات.</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">4. مشاركة البيانات</h3>
+      <p>بياناتكم <strong>لا تباع أبدًا</strong> لأطراف ثالثة. يتم مشاركتها فقط مع مقاولينا التقنيين الضروريين لتشغيل الخدمة، وبشكل خاص:</p>
+      <ul class="list-disc pr-5 space-y-2 mt-2">
+        <li><strong>Google Firebase:</strong> لاستضافة قاعدة البيانات والمصادقة.</li>
+        <li><strong>Google Gemini API:</strong> يتم إرسال النصوص والروابط التي تقدمونها إلى واجهة برمجة تطبيقات Gemini للتحليل الأساسي. لا تستخدم Google هذه البيانات لتدريب نماذجها العامة.</li>
+        <li><strong>ARIA OS (وكيل الذكاء الاصطناعي):</strong> الذكاء الاصطناعي الداخلي الذي يعمل كطبقة إضافية. يعالج البيانات الخام لاستخراج نصوص ذات صلة عالية ومعايرة، إلخ.</li>
+        <li><strong>Cakenews Labs:</strong> كيان تابع لـ Mmedia Universe مسؤول عن تطوير الهندسة التقنية لـ Aria OS. تتبادل فرقه البيانات مع وكيل ARIA OS، لا سيما بهدف تشغيل وتحسين منصة الأخبار للغير Cakenews.</li>
+      </ul>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">5. سياسة ملفات تعريف الارتباط</h3>
+      <p>يستخدم تطبيق Aria OS ملفات تعريف الارتباط والتقنيات المشابهة (التخزين المحلي، تخزين الجلسة) بطريقة محدودة للغاية <strong>ولأسباب تقنية ضرورية فقط</strong>:</p>
+      <ul class="list-disc pr-5 space-y-2 mt-2">
+        <li><strong>ملفات تعريف ارتباط المصادقة (Firebase Auth):</strong> تسمح بالحفاظ على نشاط جلستكم دون الحاجة إلى إعادة تسجيل الدخول في كل زيارة.</li>
+        <li><strong>التفضيلات المحلية:</strong> حفظ المظهر الخاص بكم (فاتح/داكن).</li>
+      </ul>
+      <p><strong>لا يتم استخدام ملفات تعريف ارتباط إعلانية أو تتبع من جهات خارجية (مثل Google Analytics أو Meta Pixel) في هذا التطبيق.</strong> وبالتالي، لا يلزم وجود لافتة موافقة على ملفات تعريف الارتباط بموجب اللوائح (GDPR)، حيث تعفى ملفات تعريف الارتباط التقنية من الموافقة المسبقة.</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">6. حقوقكم</h3>
+      <p>وفقًا للوائح حماية البيانات المعمول بها، لديكم الحق في الوصول والتصحيح والحذف ونقل بياناتكم. لممارسة هذه الحقوق، يمكنكم استخدام خيارات الحذف في التطبيق أو الاتصال بنا على الرقم الموضح في الإشعارات القانونية.</p>
+    `
+  },
+  zh: {
+    'layout.generate': '生成',
+    'layout.scripts': '脚本',
+    'layout.videos': '影片',
+    'layout.inbox': '收件箱',
+    'layout.me': '我',
+    'badge.scripts': '生成的脚本',
+    'common.cancel': '取消',
+    'common.confirm': '确认',
+    'common.back': '返回',
+    'common.save': '保存',
+    'common.saved': '已保存',
+    'common.delete': '删除',
+    'common.close': '关闭',
+    'common.copy': '复制',
+    'common.download': '下载',
+    'common.share': '分享',
+    'common.loading': '加载中...',
+
+    'settings.title': '个人资料和设置',
+    'settings.desc': '管理您的帐户和偏好设置。',
+    'settings.guest': '访客',
+    'settings.noAccount': '无账号模式',
+    'settings.generated': '已生成',
+    'settings.logout': '登出',
+    'settings.logout.title': '要登出吗？',
+    'settings.logout.desc': '您需要再次登录才能访问您的脚本和偏好设置。',
+    'settings.deleteAccount': '删除我的账户',
+    'settings.delete.title': '删除账户？',
+    'settings.delete.desc': '这将安排您的账户在 3 天后删除。您的数据将无法恢复。',
+    'settings.preferences': '偏好',
+    'settings.darkMode': '深色模式',
+    'settings.darkModeDesc': '反转界面颜色',
+    'settings.language': '语言',
+    'settings.languageDesc': '选择界面语言',
+    'settings.contact': '联系团队',
+    'settings.cgu': '使用条款',
+    'settings.about': '关于 Aria OS',
+
+    // Settings Account & Modals
+    'settings.account.deleting': '正在删除...',
+    'settings.account.deletingDesc': '您的账户正在被销毁。',
+    'settings.account.scheduled': '已安排删除',
+    'settings.account.scheduledDesc': '您的账户将于此日期永久删除：',
+    'settings.account.cancelDelete': '取消删除',
+    'settings.account.deleteAccount': '删除我的账户',
+    'settings.account.deleteWarning': '永久删除前将有 3 天的延迟。',
+    'settings.modal.logoutTitle': '退出登录？',
+    'settings.modal.logoutDesc': '您需要重新登录才能访问您的脚本和偏好设置。',
+    'settings.modal.deleteTitle': '删除账户？',
+    'settings.modal.deleteDesc': '此操作将安排在 3 天后删除您的账户。您的数据将无法恢复。',
+
+    'about.title': '关于',
+    'about.version': '版本 4.0.0',
+    'about.desc': 'Aria OS 是下一代媒体内容工作坊。它能将任何来源转化为强大的脚本。',
+    'about.why': '为什么选择 Aria OS？',
+    'about.whyDesc': 'Aria 这个词让人联想到表达性旋律。Aria OS 帮助您谱写自己的媒体乐章。',
+    'about.footer': '设计和开发：',
+
+    'legal.title': '法律声明及服务条款',
+    'legal.tabs.cgu': '通用条款',
+    'legal.tabs.mentions': '法律声明',
+    'legal.tabs.privacy': '隐私',
+    'legal.update': '最后更新：2026年4月14日',
+
+    'history.title': '历史记录',
+    'history.desc': '查找和管理您的脚本。',
+    'history.search': '搜索...',
+    'history.sort.recent': '最近',
+    'history.sort.old': '最早',
+    'history.sort.az': '按 A 到 Z 排序',
+    'history.sort.za': '按 Z 到 A 排序',
+    'history.tabs.active': '活动中',
+    'history.tabs.trash': '回收站',
+    'history.empty': '未生成脚本',
+    'history.emptyDesc': '您未来的作品将列在这里。',
+    'history.trash.empty': '回收站为空',
+    'history.trash.emptyDesc': '删除的项目将出现在这里。',
+    'history.noResults': '未找到结果',
+    'history.searchEmptyDesc': '尝试修改您的搜索。',
+    'history.customTitle': '自定义标题...',
+    'history.actions.trash': '移至回收站',
+    'history.actions.restore': '恢复',
+    'history.actions.deleteForever': '永久删除',
+    'history.actions.delete': '删除',
+    'history.modal.details': '脚本详情',
+    'history.modal.studio': '工作室',
+    'history.trash.confirmTitle': '移至回收站？',
+    'history.trash.confirmDesc': '该脚本将被移至回收站，可以恢复。',
+    'history.trash.hardConfirmTitle': '永久删除',
+    'history.trash.hardConfirmDesc': '此操作不可逆。脚本将被永久删除。',
+
+    // Home
+    'home.ad1.badge': '公测',
+    'home.ad1.title': '您的内容变现。',
+    'home.ad1.desc': '发现为 ARIAOS 创作者提供的专属合作伙伴计划。',
+    'home.ad2.badge': '新功能',
+    'home.ad2.title': '多格式导出',
+    'home.ad2.desc': '以 PDF、Word 和交互式提词器格式下载您的脚本。',
+    'home.ad3.badge': '分析',
+    'home.ad3.title': '了解观众。',
+    'home.ad3.desc': '您最新项目的全新影响度量指标。',
+    'home.steps.load': '加载',
+    'home.steps.config': '配置',
+    'home.steps.generate': '生成',
+    'home.source.title': '内容来源',
+    'home.source.desc': '粘贴 URL (YouTube、文章、博客...) 或纯文本。',
+    'home.source.url': 'URL',
+    'home.source.rawText': '纯文本',
+    'home.source.placeholderUrl': 'https://...',
+    'home.source.placeholderText': '在此处粘贴您的文本...',
+    'home.source.errorUnsupported': '不支持此视频平台。仅兼容 YouTube。',
+    'home.source.errorInvalid': '请输入有效的 URL (例如：https://...)。',
+    'home.config.title': '配置助手',
+    'home.config.desc': '让我们引导您逐步设置完美的要求。',
+    'home.config.q1': '1. 此脚本的目标是什么？',
+    'home.config.q2': '2. AI 应该采用什么样的编辑基调？',
+    'home.config.q3': '3. 我对该主题的立场应该是什么？',
+    'home.config.q4': '4. 目标音频时长是多少？',
+    'home.intentions.ana': '分析',
+    'home.intentions.crit': '评论',
+    'home.intentions.expl': '解释',
+    'home.intentions.reph': '重写',
+    'home.intentions.deb': '辩论',
+    'home.tones.fact': '纪实 (中性)',
+    'home.tones.punchy': '动感 (充满活力)',
+    'home.tones.sat': '讽刺',
+    'home.tones.insp': '励志',
+    'home.tones.ana': '分析',
+    'home.tones.drama': '戏剧化',
+    'home.stances.obj': '客观',
+    'home.stances.fav': '有利 (赞扬)',
+    'home.stances.unfav': '不利 (批判)',
+    'home.durations.sec': '秒',
+    'home.durations.min': '分钟',
+    'home.durations.30s': '30 秒',
+    'home.durations.1m': '1 分钟',
+    'home.durations.2m': '2 分钟',
+    'home.durations.3m': '3 分钟',
+    'home.durations.5m': '5 分钟',
+    'home.actions.continue': '继续',
+    'home.actions.back': '返回',
+    'home.actions.generate': '生成',
+    'home.actions.copy': '复制',
+    'home.actions.download': '下载',
+    'home.actions.new': '新建',
+    'home.actions.edit': '编辑文本',
+    'home.actions.preview': '专业预览',
+    'home.actions.studio': '工作室',
+    'home.actions.save': '保存',
+    'home.actions.saved': '已保存',
+    'home.actions.share': '分享',
+    'home.meta.words': '字',
+    'home.meta.author': '作者',
+    'home.meta.anonAuthor': '匿名作者',
+    'home.meta.generatedAt': '生成于',
+    'home.meta.at': '于',
+    'home.meta.targetDuration': '目标时长',
+    'home.meta.thinkingTime': '思考时间',
+    'home.meta.sourceText': '文本来源',
+    'home.meta.loadingDesc': '请稍候，根据来源的复杂程度和大小，这可能需要几秒钟。',
+    'home.meta.writing': '撰写中...',
+    'home.meta.placeholderResult': '您的脚本将显示在此处...',
+    'home.ad.goToSlide': '转到幻灯片',
+    'home.loading.m1': '正在分析您的数据源...',
+    'home.loading.m2': '正在提取内容精华...',
+    'home.loading.m3': '正在构建脚本叙事...',
+    'home.loading.m4': '正在调整专业基调...',
+    'home.loading.m5': '正在润色新闻风格...',
+    'home.loading.m6': '正在完成撰写...',
+    'home.loading.d1': '生成时间比预期稍长...',
+    'home.loading.d2': '正在处理复杂的分析...',
+    'home.loading.d3': '源内容详实，我们正在加倍努力...',
+    'home.loading.d4': '您的互联网连接可能变慢...',
+    'home.loading.d5': '请勿离开，数据正在最后组装中...',
+
+    // Studio
+    'studio.actions.quit': '退出',
+    'studio.actions.selectScript': '选择脚本',
+    'studio.permission.title': '需要权限',
+    'studio.permission.desc': '要拍摄或录制您的声音，您必须允许访问您的摄像头和麦克风。',
+    'studio.permission.activate': '启用摄像头',
+    'studio.mode.audio': '仅音频模式',
+    'studio.actions.retake': '重录',
+    'studio.actions.saving': '保存中...',
+    'studio.actions.save': '保存',
+    'studio.settings.size': '大小',
+    'studio.settings.speed': '速度',
+    'studio.settings.mask': '遮罩',
+    'studio.settings.shadow': '阴影',
+    'studio.actions.frontCam': '前置摄像头',
+    'studio.actions.rearCam': '后置摄像头',
+    'studio.actions.audioOnly': '仅限音频',
+    'studio.empty.title': '无活动脚本',
+    'studio.empty.desc': '将生成的脚本添加到提词器中，以简化录制并提高您的口才。',
+    'studio.empty.browse': '浏览我的脚本',
+    'studio.selector.title': '选择脚本',
+    'studio.selector.empty': '无可用脚本',
+    'studio.selector.emptyDesc': '您尚未生成任何脚本。',
+    'studio.selector.create': '创建脚本',
+    'studio.selector.loadMore': '加载更多',
+
+    // Videos
+    'videos.hero.new': '新录制',
+    'videos.hero.desc': '打开录制工作室',
+    'videos.title': '我的影片',
+    'videos.desc': '查找并管理您的录制。',
+    'videos.empty': '未找到影片',
+    'videos.emptyDesc': '尝试修改您的搜索或前往工作室录制一段影片！',
+    'videos.actions.pin': '置顶',
+    'videos.actions.unpin': '取消置顶',
+    'videos.actions.rename': '点击重命名',
+    'videos.actions.whatsapp': '分享至 WhatsApp',
+    'videos.actions.emptyTrash': '清空回收站',
+    'videos.scriptModal.title': '视频脚本',
+    'videos.loadMore': '加载更多视频',
+
+    // Source Viewer
+    'source.videoPlayer': '视频播放器',
+    'source.browser': '内部浏览器',
+    'source.openNewTab': '在新标签页中打开',
+
+    // Notifications
+    'notif.title': '通知',
+    'notif.desc': '随时了解最新动态。',
+    'notif.empty': '暂无通知',
+    'notif.emptyDesc': '您已了解所有最新动态！新公告将显示在此处。',
+    'notif.actions.markAsRead': '标记为已读',
+    'notif.actions.delete': '删除',
+    'notif.actions.deleteConfirm': '您确定要删除此通知吗？',
+
+    'login.welcome': '欢迎来到',
+    'login.desc': '登录以立即将您的资源转化为强大的视频脚本。',
+    'login.google': '使用 Google 继续',
+    'login.anonymous': '访客试用',
+    'login.anonymousWarn': '访客模式是暂时的。保存功能已禁用。',
+    'login.cgu': '登录即表示您同意我们的服务条款。',
+
+    'legal.cgu.text': `
+      <h2 class="text-2xl font-bold text-black dark:text-white mb-2">使用条款和条件 (CGU)</h2>
+      <p class="text-gray-500 mb-8">最后更新：2026年4月14日</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">第一条：目的</h3>
+      <p>本使用条款和条件（以下简称“CGU”）旨在定义 Mmedia Universe 公司（以下简称“出版商”）向用户（以下简称“用户”）提供 Aria OS 应用程序（以下简称“应用程序”）的方式和条件，以及各方在此框架下的权利和义务。</p>
+      <p>访问和使用本应用程序须遵守并符合本 CGU。通过创建帐户或使用本应用程序，用户明示且无保留地接受本 CGU。</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">第二条：访问应用程序</h3>
+      <p>本应用程序目前免费提供，出版商保留将来修改定价条件的权利。所有与访问相关的费用，无论是硬件、软件还是互联网访问费用，均由用户承担。</p>
+      <p>访问某些功能需要通过 Google 身份验证服务 (Google OAuth) 创建用户帐户。用户同意提供准确的信息并维护其登录凭据的机密性。</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">第三条：服务说明</h3>
+      <p>Aria OS 是一款辅助制作编辑内容的专业工具。它特别允许：</p>
+      <ul class="list-disc pl-5 space-y-2 mt-2">
+        <li>分析文本内容、文章或视频（通过 URL）等。</li>
+        <li>通过我们的人工智能自动生成文档，例如为配音校准的脚本。</li>
+        <li>使用集成视频录制工作室（带有提词器、镜头管理、视频导出等）。</li>
+        <li>保存、历史流程追踪和分享。</li>
+        <li>在界面中显示广告横幅和推广内容等。</li>
+      </ul>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">第四条：知识产权和版权</h3>
+      <p><strong>4.1. 应用程序权利：</strong> 应用程序的架构、商标、徽标、图形、软件、算法和数据库是 Mmedia Universe 的专属财产，受知识产权法保护。平台保留其技术、算法和界面的所有权利。</p>
+      <p><strong>4.2. 第三方商标：</strong> 应用程序上显示的第三方商标和徽标（如 YouTube、路透社等）属于其各自的所有者。它们仅用于插图目的，以指示我们的工具与这些平台的兼容性。Mmedia Universe 不声明与这些商标有任何关联或权利。</p>
+      <p><strong>4.3. 来源权利：</strong> 用户同意仅向应用程序提交其拥有必要权利（版权、引用权、公共领域）的 URL 或文本。出版商对用户欺诈性提交的受保护内容分析不承担任何责任。</p>
+      <p><strong>4.4. 生成内容权利：</strong> 用户有权自由、充分地商业化利用应用程序生成的脚本。出版商不对用户通过应用程序生成的最终文本声明任何版权。</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">第五条：责任和 AI 限制</h3>
+      <p>应用程序依靠先进的人工智能模型来分析提供的来源并根据针对配音优化的格式构建内容。我们的技术将这些模型与独家分析流程相结合，以确保专业效果，而不会公开我们的内部算法细节。用户承认：</p>
+      <ul class="list-disc pl-5 space-y-2 mt-2">
+        <li>AI 可能会生成不准确、不完整或过时的信息（幻觉现象）。</li>
+        <li>用户（作为内容创作者或记者）全权负责在任何发布或录制之前验证、事实核查和确认脚本。</li>
+      </ul>
+      <p>Mmedia Universe 在任何情况下均不对因使用生成的脚本而导致的直接或间接损害（诽谤、虚假新闻、商业损失）承担责任。</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">第六条：服务可用性</h3>
+      <p>出版商努力保持应用程序每周 7 天、每天 24 小时可用，但不承担结项义务。出版商保留因维护或更新原因暂停、中断或限制访问应用程序全部或部分的权利。</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">第七条：CGU 修改</h3>
+      <p>Mmedia Universe 保留随时修改本 CGU 的权利。用户将被告知任何重大修改。修改后继续使用应用程序即视为接受新的 CGU。</p>
+    `,
+    'legal.mentions.text': `
+      <h2 class="text-2xl font-bold text-black dark:text-white mb-2">法律声明</h2>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">1. 应用程序出版商</h3>
+      <p><strong>Aria OS</strong> 应用程序由以下公司出版和运营：</p>
+      <p class="mt-2">
+        <strong>Mmedia Universe</strong><br>
+        Mimongo, Gabon<br>
+        注册资本：7,000,000 FCFA
+      </p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">2. 联系我们</h3>
+      <p>
+        电话：<strong>+241 66 17 10 36</strong><br>
+        电子邮件：<strong>enjoymegabon&#64;gmail.com</strong>
+      </p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">3. 托管</h3>
+      <p>应用程序及其数据库由以下公司托管：</p>
+      <p class="mt-2">
+        <strong>Google Cloud Platform (GCP) / Firebase</strong><br>
+        Google Ireland Limited<br>
+        Gordon House, Barrow Street<br>
+        Dublin 4, Ireland
+      </p>
+    `,
+    'legal.privacy.text': `
+      <h2 class="text-2xl font-bold text-black dark:text-white mb-2">隐私政策和 Cookies</h2>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">1. 个人数据收集</h3>
+      <p>在使用 Aria OS 应用程序的过程中，我们收集以下数据：</p>
+      <ul class="list-disc pl-5 space-y-2 mt-2">
+        <li><strong>身份数据：</strong> 姓名、电子邮件地址和个人资料照片（由 Google 在 OAuth 登录期间提供）。</li>
+        <li><strong>使用数据：</strong> 生成脚本历史记录、提交的 URL、分析的文本、生成参数（语气、时长）。</li>
+        <li><strong>技术数据：</strong> 登录标识符（Firebase UID）。</li>
+      </ul>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">2. 处理目的</h3>
+      <p>处理您的数据出于以下目的：</p>
+      <ul class="list-disc pl-5 space-y-2 mt-2">
+        <li>提供脚本生成服务。</li>
+        <li>允许保存和查阅您的个人历史记录。</li>
+        <li>确保应用程序安全并防止滥用（配额限制）。</li>
+        <li>改进我们的生成算法和产品（匿名方式）等。</li>
+      </ul>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">3. 数据保留</h3>
+      <p>只要您的帐户处于活跃状态，您的身份数据和历史记录就会保留。您可以在应用程序设置中使用一项功能，该功能允许您<strong>永久删除您的帐户和所有数据</strong>。一旦执行此操作，数据将无法恢复。</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">4. 数据共享</h3>
+      <p>您的数据<strong>绝不出售</strong>给第三方。它们仅与我们服务运营严格必需的技术分包商共享，特别是：</p>
+      <ul class="list-disc pl-5 space-y-2 mt-2">
+        <li><strong>Google Firebase：</strong> 用于数据库托管和身份验证。</li>
+        <li><strong>Google Gemini API：</strong> 您提交的文本和 URL 将发送到 Gemini API 进行基本分析。这些数据不被 Google 用于训练其公开模型。</li>
+        <li><strong>ARIA OS (AI 代理)：</strong> 充当叠加层的内部人工智能。它处理原始数据以提取高度相关、校准的脚本等。</li>
+        <li><strong>Cakenews Labs：</strong> Mmedia Universe 实体，负责 Aria OS 技术架构开发。其团队与 ARIA OS 代理交换数据，特别是为了支持和优化第三方新闻平台 Cakenews。</li>
+      </ul>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">5. Cookie 政策</h3>
+      <p>Aria OS 应用程序以非常有限的方式且<strong>仅出于严格必需的技术原因</strong>使用 Cookie 和类似技术（本地存储、会话存储）：</p>
+      <ul class="list-disc pl-5 space-y-2 mt-2">
+        <li><strong>身份验证 Cookie (Firebase Auth)：</strong> 允许保持您的会话活跃，无需每次访问都重新登录。</li>
+        <li><strong>本地偏好：</strong> 保存您的主题（浅色/深色）。</li>
+      </ul>
+      <p><strong>本应用程序不使用任何广告或第三方跟踪 Cookie（如 Google Analytics 或 Meta Pixel）。</strong> 因此，根据法规 (GDPR)，不需要 Cookie 同意横幅，因为技术性 Cookie 免于事先同意。</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">6. 您的权利</h3>
+      <p>根据适用的数据保护法规，您对自己的数据拥有访问权、纠正权、删除权和携带权。要行使这些权利，您可以使用应用程序中的删除选项，或通过法律声明中指示的号码联系我们。</p>
+    `
+  },
+  es: {
+    'layout.generate': 'Generar',
+    'layout.scripts': 'Textos',
+    'layout.videos': 'Videos',
+    'layout.inbox': 'Buzón',
+    'layout.me': 'Yo',
+    'badge.scripts': 'Textos Generados',
+    'common.cancel': 'Cancelar',
+    'common.confirm': 'Confirmar',
+    'common.back': 'Volver',
+    'common.save': 'Guardar',
+    'common.saved': 'Guardado',
+    'common.delete': 'Eliminar',
+    'common.close': 'Cerrar',
+    'common.copy': 'Copiar',
+    'common.download': 'Descargar',
+    'common.share': 'Compartir',
+    'common.loading': 'Cargando...',
+
+    'settings.title': 'Perfil y Configuración',
+    'settings.desc': 'Gestiona tu cuenta y preferencias.',
+    'settings.guest': 'Invitado',
+    'settings.noAccount': 'Modo sin cuenta',
+    'settings.generated': 'Generados',
+    'settings.logout': 'Cerrar sesión',
+    'settings.logout.title': '¿Cerrar sesión?',
+    'settings.logout.desc': 'Deberás iniciar sesión de nuevo para acceder a tus textos y preferencias.',
+    'settings.deleteAccount': 'Eliminar mi cuenta',
+    'settings.delete.title': '¿Eliminar cuenta?',
+    'settings.delete.desc': 'Esto programará tu cuenta para ser eliminada en 3 días. Tus datos serán irrecuperables.',
+    'settings.preferences': 'Preferencias',
+    'settings.darkMode': 'Modo oscuro',
+    'settings.darkModeDesc': 'Invertir los colores de la interfaz',
+    'settings.language': 'Idioma',
+    'settings.languageDesc': 'Elige el idioma de la interfaz',
+    'settings.contact': 'Contactar al Equipo',
+    'settings.cgu': 'Términos de Servicio',
+    'settings.about': 'Acerca de Aria OS',
+
+    // Settings Account & Modals
+    'settings.account.deleting': 'Eliminación en curso...',
+    'settings.account.deletingDesc': 'Tu cuenta está siendo destruida.',
+    'settings.account.scheduled': 'Eliminación programada',
+    'settings.account.scheduledDesc': 'Tu cuenta será eliminada definitivamente el',
+    'settings.account.cancelDelete': 'Cancelar eliminación',
+    'settings.account.deleteAccount': 'Eliminar mi cuenta',
+    'settings.account.deleteWarning': 'Se aplicará un plazo de 3 días antes de la eliminación definitiva.',
+    'settings.modal.logoutTitle': '¿Cerrar sesión?',
+    'settings.modal.logoutDesc': 'Deberás volver a iniciar sesión para acceder a tus textos y preferencias.',
+    'settings.modal.deleteTitle': '¿Eliminar cuenta?',
+    'settings.modal.deleteDesc': 'Esta acción programará la eliminación de tu cuenta en 3 días. Tus datos serán irrecuperables.',
+
+    'about.title': 'Acerca de',
+    'about.version': 'Versión 4.0.0',
+    'about.desc': 'Aria OS es el taller de contenido multimedia de nueva generación. Transforma cualquier fuente en potentes textos.',
+    'about.why': '¿Por qué Aria OS?',
+    'about.whyDesc': 'La palabra Aria evoca una melodía expresiva. Aria OS te ayuda a componer tu propia partitura mediática.',
+    'about.footer': 'Diseñado y desarrollado por',
+
+    'legal.title': 'Avisos Legales y TDS',
+    'legal.tabs.cgu': 'Términos Generales',
+    'legal.tabs.mentions': 'Avisos Legales',
+    'legal.tabs.privacy': 'Privacidad',
+    'legal.update': 'Última actualización: 14 de abril de 2026',
+
+    'history.title': 'Historial',
+    'history.desc': 'Encuentra y gestiona tus textos.',
+    'history.search': 'Buscar...',
+    'history.sort.recent': 'Más Recientes',
+    'history.sort.old': 'Más Antiguos',
+    'history.sort.az': 'De A a Z',
+    'history.sort.za': 'De Z a A',
+    'history.tabs.active': 'Activos',
+    'history.tabs.trash': 'Papelera',
+    'history.empty': 'No se generaron textos',
+    'history.emptyDesc': 'Tus futuras creaciones se listarán aquí.',
+    'history.trash.empty': 'La papelera está vacía',
+    'history.trash.emptyDesc': 'Los elementos eliminados aparecerán aquí.',
+    'history.noResults': 'Sin resultados',
+    'history.searchEmptyDesc': 'Intenta modificar tu búsqueda.',
+    'history.customTitle': 'Título personalizado...',
+    'history.actions.trash': 'Mover a la papelera',
+    'history.actions.restore': 'Restablecer',
+    'history.actions.deleteForever': 'Eliminar definitivamente',
+    'history.actions.delete': 'Eliminar',
+    'history.modal.details': 'Detalles del texto',
+    'history.modal.studio': 'Estudio',
+    'history.trash.confirmTitle': '¿Mover a la papelera?',
+    'history.trash.confirmDesc': 'Este texto se moverá a la papelera y podrá ser restablecido.',
+    'history.trash.hardConfirmTitle': 'Eliminación definitiva',
+    'history.trash.hardConfirmDesc': 'Esta acción es irreversible. El texto se eliminará para siempre.',
+
+    // Home
+    'home.ad1.badge': 'Prueba Beta',
+    'home.ad1.title': 'Monetiza tu contenido.',
+    'home.ad1.desc': 'Descubre nuestro exclusivo programa de asociación para creadores de ARIAOS.',
+    'home.ad2.badge': 'Novedad',
+    'home.ad2.title': 'Exportación Multi-Formato',
+    'home.ad2.desc': 'Descarga tus guiones en PDF, Word y formato Teleprompter interactivo.',
+    'home.ad3.badge': 'Análisis',
+    'home.ad3.title': 'Entiende a la audiencia.',
+    'home.ad3.desc': 'Nuevas métricas de impacto disponibles en tus últimos proyectos.',
+    'home.steps.load': 'Cargar',
+    'home.steps.config': 'Configurar',
+    'home.steps.generate': 'Generar',
+    'home.source.title': 'Fuente del contenido',
+    'home.source.desc': 'Pega una URL (YouTube, Artículo, Blog...) o texto plano.',
+    'home.source.url': 'URL',
+    'home.source.rawText': 'Texto Plano',
+    'home.source.placeholderUrl': 'https://...',
+    'home.source.placeholderText': 'Pega tu texto aquí...',
+    'home.source.errorUnsupported': 'Esta plataforma de video no es compatible. Solo YouTube es compatible.',
+    'home.source.errorInvalid': 'Por favor, introduce una URL válida (ej: https://...).',
+    'home.config.title': 'Asistente de Configuración',
+    'home.config.desc': 'Déjanos guiarte paso a paso para configurar la solicitud perfecta.',
+    'home.config.q1': '1. ¿Cuál es el objetivo de este guion?',
+    'home.config.q2': '2. ¿Qué tono editorial debe adoptar la IA?',
+    'home.config.q3': '3. ¿Cuál debe ser mi postura sobre el tema?',
+    'home.config.q4': '4. ¿Cuál es la duración objetivo del audio?',
+    'home.intentions.ana': 'Analizar',
+    'home.intentions.crit': 'Criticar',
+    'home.intentions.expl': 'Explicar',
+    'home.intentions.reph': 'Reformular',
+    'home.intentions.deb': 'Debatir',
+    'home.tones.fact': 'Factual (Neutro)',
+    'home.tones.punchy': 'Punchy (Dinámico)',
+    'home.tones.sat': 'Satírico',
+    'home.tones.insp': 'Inspirador',
+    'home.tones.ana': 'Analítico',
+    'home.tones.drama': 'Dramático',
+    'home.stances.obj': 'Objetivo',
+    'home.stances.fav': 'Favorable (Elogioso)',
+    'home.stances.unfav': 'Desfavorable (Crítico)',
+    'home.durations.sec': 'seg',
+    'home.durations.min': 'min',
+    'home.durations.30s': '30 seg',
+    'home.durations.1m': '1 min',
+    'home.durations.2m': '2 min',
+    'home.durations.3m': '3 min',
+    'home.durations.5m': '5 min',
+    'home.actions.continue': 'Continuar',
+    'home.actions.back': 'Volver',
+    'home.actions.generate': 'Generar',
+    'home.actions.copy': 'Copiar',
+    'home.actions.download': 'Descargar',
+    'home.actions.new': 'Nuevo',
+    'home.actions.edit': 'Editar texto',
+    'home.actions.preview': 'Vista Previa Pro',
+    'home.actions.studio': 'Estudio',
+    'home.actions.save': 'Guardar',
+    'home.actions.saved': 'Guardado',
+    'home.actions.share': 'Compartir',
+    'home.meta.words': 'palabras',
+    'home.meta.author': 'Autor',
+    'home.meta.anonAuthor': 'Autor Anónimo',
+    'home.meta.generatedAt': 'Generado el',
+    'home.meta.at': 'a las',
+    'home.meta.targetDuration': 'Duración objetivo',
+    'home.meta.thinkingTime': 'Tiempo de reflexión',
+    'home.meta.sourceText': 'Fuente de texto',
+    'home.meta.loadingDesc': 'Por favor espera, esto puede tardar unos segundos según la complejidad y el tamaño de la fuente.',
+    'home.meta.writing': 'Escribiendo...',
+    'home.meta.placeholderResult': 'Tu guion aparecerá aquí...',
+    'home.ad.goToSlide': 'Ir a la diapositiva',
+    'home.loading.m1': 'Analizando tu fuente de datos...',
+    'home.loading.m2': 'Extrayendo la esencia del contenido...',
+    'home.loading.m3': 'Estructurando la narración del guion...',
+    'home.loading.m4': 'Ajustando el tono profesional...',
+    'home.loading.m5': 'Puliedo el estilo periodístico...',
+    'home.loading.m6': 'Finalizando la redacción...',
+    'home.loading.d1': 'La generación está tardando un poco más de lo esperado...',
+    'home.loading.d2': 'Análisis complejos en trámite...',
+    'home.loading.d3': 'La fuente es densa, estamos redoblando esfuerzos...',
+    'home.loading.d4': 'Tu conexión a internet podría estar lenta...',
+    'home.loading.d5': 'No te retires, los datos están en ensamblaje final...',
+
+    // Studio
+    'studio.actions.quit': 'Salir',
+    'studio.actions.selectScript': 'Seleccionar guion',
+    'studio.permission.title': 'Permiso requerido',
+    'studio.permission.desc': 'Para filmar o grabar tu voz, debes permitir el acceso a tu cámara y micrófono.',
+    'studio.permission.activate': 'Activar cámara',
+    'studio.mode.audio': 'Modo Solo Audio',
+    'studio.actions.retake': 'Reintentar',
+    'studio.actions.saving': 'Guardando...',
+    'studio.actions.save': 'Guardar',
+    'studio.settings.size': 'Tamaño',
+    'studio.settings.speed': 'Velocidad',
+    'studio.settings.mask': 'Máscara',
+    'studio.settings.shadow': 'Sombra',
+    'notif.title': 'Notificaciones',
+    'notif.desc': 'Mantente informado sobre las actualizaciones.',
+    'notif.empty': 'Sin notificaciones',
+    'notif.emptyDesc': '¡Estás al día! Los nuevos anuncios aparecerán aquí.',
+    'notif.actions.markAsRead': 'Marcar como leído',
+    'notif.actions.delete': 'Eliminar',
+    'notif.actions.deleteConfirm': '¿Realmente quieres eliminar esta notificación?',
+
+    'login.welcome': 'Bienvenido a',
+    'login.desc': 'Inicia sesión para transformar instantáneamente tus fuentes en potentes textos de video.',
+    'login.google': 'Continuar con Google',
+    'login.anonymous': 'Probar como Invitado',
+    'login.anonymousWarn': 'El modo invitado es temporal. Guardar está desactivado.',
+    'login.cgu': 'Al iniciar sesión, aceptas nuestros TDS.',
+
+    'legal.cgu.text': `
+      <h2 class="text-2xl font-bold text-black dark:text-white mb-2">Términos y Condiciones de Uso (TDU)</h2>
+      <p class="text-gray-500 mb-8">Última actualización: 14 de abril de 2026</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">Artículo 1: Objeto</h3>
+      <p>Los presentes Términos y Condiciones de Uso (en adelante «TDU») tienen por objeto definir las modalidades y condiciones en las que la sociedad Mmedia Universe (en adelante «el Editor») pone a disposición de los usuarios (en adelante «el Usuario») la aplicación Aria OS (en adelante «la Aplicación»), así como los derechos y obligaciones de las partes en este marco.</p>
+      <p>El acceso y la utilización de la Aplicación están sujetos a la aceptación y al cumplimiento de los presentes TDU. Al crear una cuenta o utilizar la Aplicación, el Usuario acepta expresa y sin reservas los presentes TDU.</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">Artículo 2: Acceso a la Aplicación</h3>
+      <p>La Aplicación se ofrece actualmente de forma gratuita, reservándose el Editor el derecho de modificar las condiciones tarifarias en el futuro. Todos los costes relativos al acceso, ya sean gastos de hardware, software o de acceso a internet, son responsabilidad exclusiva del Usuario.</p>
+      <p>El acceso a ciertas funcionalidades requiere la creación de una cuenta de usuario a través del servicio de autenticación de Google (Google OAuth). El Usuario se compromete a proporcionar información exacta y a mantener la confidencialidad de sus credenciales de inicio de sesión.</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">Artículo 3: Descripción del Servicio</h3>
+      <p>Aria OS es una herramienta profesional de ayuda a la creación de contenido editorial. Permite notablemente:</p>
+      <ul class="list-disc pl-5 space-y-2 mt-2">
+        <li>El análisis de contenidos textuales, artículos o vídeos (vía URL), etc.</li>
+        <li>La generación automatizada de documentos, como guiones calibrados para locución, a través de nuestra inteligencia artificial.</li>
+        <li>El uso de un Estudio de grabación de vídeo integrado (con teleprónter, gestión de tomas, exportación de vídeo, etc.).</li>
+        <li>El guardado, historial de procesos y el intercambio.</li>
+        <li>La visualización eventual de banners publicitarios y contenidos promocionales en la interfaz, etc.</li>
+      </ul>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">Artículo 4: Propiedad Intelectual y Derechos de Autor</h3>
+      <p><strong>4.1. Derechos sobre la Aplicación:</strong> La arquitectura de la Aplicación, las marcas, logos, grafismos, software, algoritmos y bases de datos son propiedad exclusiva de Mmedia Universe y están protegidos por el derecho de propiedad intelectual. La plataforma conserva todos los derechos sobre su tecnología, sus algoritmos y su interfaz.</p>
+      <p><strong>4.2. Marcas de terceros:</strong> Las marcas y logos de terceros (tales como YouTube, Reuters, etc.) mostrados en la Aplicación pertenecen a sus respectivos propietarios. Se utilizan únicamente con fines ilustrativos para indicar la compatibilidad de nuestra herramienta con estas plataformas. Mmedia Universe no reivindica ninguna afiliación ni ningún derecho sobre estas marcas.</p>
+      <p><strong>4.3. Derechos sobre las fuentes:</strong> El Usuario se compromete a no enviar a la Aplicación más que URLs o textos para los cuales disponga de los derechos necesarios (derechos de autor, derecho de cita, dominio público). El Editor declina toda responsabilidad en caso de análisis de contenidos protegidos enviados de forma fraudulenta por el Usuario.</p>
+      <p><strong>4.4. Derechos sobre los contenidos generados:</strong> El Usuario dispone del derecho de explotar libremente, íntegramente y comercialmente los guiones generados por la Aplicación. El Editor no reivindica ningún derecho de autor sobre los textos finales producidos por el Usuario a través de la Aplicación.</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">Artículo 5: Responsabilidad y Límites de la IA</h3>
+      <p>La Aplicación se apoya en modelos de Inteligencia Artificial avanzados para analizar las fuentes proporcionadas y estructurar el contenido según formatos optimizados para locución. Nuestra tecnología combina estos modelos con procesos de análisis exclusivos para garantizar un resultado profesional, sin que los detalles de nuestros algoritmos internos sean públicos. El Usuario reconoce que:</p>
+      <ul class="list-disc pl-5 space-y-2 mt-2">
+        <li>La IA puede generar información inexacta, incompleta u obsoleta (fenómeno de alucinación).</li>
+        <li>Es responsabilidad exclusiva del Usuario (como creador de contenido o periodista) verificar, contrastar y validar los guiones antes de cualquier publicación o grabación.</li>
+      </ul>
+      <p>Mmedia Universe no podrá en ningún caso ser responsable de los daños directos o indirectos resultantes de la utilización de los guiones generados (difamación, noticias falsas, perjuicio comercial).</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">Artículo 6: Disponibilidad del Servicio</h3>
+      <p>El Editor se esfuerza por mantener la Aplicación accesible 24/7, pero no está sujeto a ninguna obligación de resultado. El Editor se reserva el derecho de suspender, interrumpir o limitar el acceso a todo o parte de la Aplicación por razones de mantenimiento o actualización.</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">Artículo 7: Modificación de los TDU</h3>
+      <p>Mmedia Universe se reserva el derecho de modificar los presentes TDU en cualquier momento. Los Usuarios serán informados de cualquier modificación sustancial. El uso continuado de la Aplicación tras la modificación implica la aceptación de los nuevos TDU.</p>
+    `,
+    'legal.mentions.text': `
+      <h2 class="text-2xl font-bold text-black dark:text-white mb-2">Avisos Legales</h2>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">1. Editor de la Aplicación</h3>
+      <p>La aplicación <strong>Aria OS</strong> es editada y operada por:</p>
+      <p class="mt-2">
+        <strong>Mmedia Universe</strong><br>
+        Mimongo, Gabón<br>
+        Capital social: 7.000.000 FCFA
+      </p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">2. Contacto</h3>
+      <p>
+        Teléfono: <strong>+241 66 17 10 36</strong><br>
+        Email: <strong>enjoymegabon&#64;gmail.com</strong>
+      </p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">3. Alojamiento</h3>
+      <p>La Aplicación y sus bases de datos están alojadas por:</p>
+      <p class="mt-2">
+        <strong>Google Cloud Platform (GCP) / Firebase</strong><br>
+        Google Ireland Limited<br>
+        Gordon House, Barrow Street<br>
+        Dublín 4, Irlanda
+      </p>
+    `,
+    'legal.privacy.text': `
+      <h2 class="text-2xl font-bold text-black dark:text-white mb-2">Política de Privacidad y Cookies</h2>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">1. Recopilación de Datos Personales</h3>
+      <p>En el marco del uso de la Aplicación Aria OS, recopilamos los siguientes datos:</p>
+      <ul class="list-disc pl-5 space-y-2 mt-2">
+        <li><strong>Datos de identificación:</strong> Nombre, apellido, dirección de correo electrónico y foto de perfil (proporcionados por Google durante el inicio de sesión OAuth).</li>
+        <li><strong>Datos de uso:</strong> Historial de guiones generados, URLs enviadas, textos analizados, parámetros de generación (tono, duración).</li>
+        <li><strong>Datos técnicos:</strong> Identificadores de conexión (UID Firebase).</li>
+      </ul>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">2. Finalidad del Tratamiento</h3>
+      <p>Sus datos son tratados para las siguientes finalidades:</p>
+      <ul class="list-disc pl-5 space-y-2 mt-2">
+        <li>Proporcionar el servicio de generación de guiones.</li>
+        <li>Permitir el guardado y la consulta de su historial personal.</li>
+        <li>Asegurar la seguridad de la Aplicación y prevenir abusos (limitación de cuotas).</li>
+        <li>Mejorar nuestros algoritmos de generación y nuestras ofertas (de manera anonimizada), etc.</li>
+      </ul>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">3. Conservación de los Datos</h3>
+      <p>Sus datos de identificación y su historial se conservan mientras su cuenta esté activa. Dispone de una funcionalidad en los ajustes de la Aplicación que permite <strong>eliminar definitivamente su cuenta y la totalidad de sus datos</strong>. Una vez realizada esta acción, los datos son irrecuperables.</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">4. Intercambio de Datos</h3>
+      <p>Sus datos <strong>nunca son vendidos</strong> a terceros. Se comparten únicamente con nuestros subcontratistas técnicos estrictamente necesarios para el funcionamiento del servicio, y especialmente:</p>
+      <ul class="list-disc pl-5 space-y-2 mt-2">
+        <li><strong>Google Firebase:</strong> Para el alojamiento de la base de datos y la autenticación.</li>
+        <li><strong>Google Gemini API:</strong> Los textos y URLs que envía son remitidos a la API Gemini para un análisis básico. Estos datos no son utilizados por Google para entrenar sus modelos públicos.</li>
+        <li><strong>ARIA OS (Agente IA):</strong> La inteligencia artificial interna que actúa como una capa superior. Procesa los datos brutos para extraer guiones altamente pertinentes y calibrados, etc.</li>
+        <li><strong>Cakenews Labs:</strong> Entidad de Mmedia Universe responsable del desarrollo de la arquitectura técnica de Aria OS. Sus equipos intercambian datos con el agente ARIA OS, especialmente con el fin de alimentar y optimizar la plataforma de información de terceros Cakenews.</li>
+      </ul>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">5. Política de Cookies</h3>
+      <p>La Aplicación Aria OS utiliza cookies y tecnologías similares (Local Storage, Session Storage) de manera muy limitada y <strong>únicamente por razones técnicas estrictamente necesarias</strong>:</p>
+      <ul class="list-disc pl-5 space-y-2 mt-2">
+        <li><strong>Cookies de autenticación (Firebase Auth):</strong> Permiten mantener su sesión activa sin tener que volver a conectarse en cada visita.</li>
+        <li><strong>Preferencias locales:</strong> Guardado de su tema (claro/oscuro).</li>
+      </ul>
+      <p><strong>No se utiliza ninguna cookie publicitaria o de seguimiento de terceros (tipo Google Analytics o Meta Pixel) en esta Aplicación.</strong> Por lo tanto, no se requiere ningún banner de consentimiento de cookies en el sentido de la normativa (RGPD), estando las cookies técnicas exentas de consentimiento previo.</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">6. Sus Derechos</h3>
+      <p>Conforme a la normativa aplicable en materia de protección de datos, dispone de un derecho de acceso, rectificación, supresión y portabilidad de sus datos. Para ejercer estos derechos, puede utilizar las opciones de eliminación en la Aplicación o contactarnos al número indicado en los Avisos Legales.</p>
+    `
+  },
+  pt: {
+    'layout.generate': 'Gerar',
+    'layout.scripts': 'Roteiros',
+    'layout.videos': 'Vídeos',
+    'layout.inbox': 'Caixa',
+    'layout.me': 'Eu',
+    'badge.scripts': 'Roteiros Gerados',
+    'common.cancel': 'Cancelar',
+    'common.confirm': 'Confirmar',
+    'common.back': 'Voltar',
+    'common.save': 'Salvar',
+    'common.saved': 'Salvo',
+    'common.delete': 'Excluir',
+    'common.close': 'Fechar',
+    'common.copy': 'Copiar',
+    'common.download': 'Baixar',
+    'common.share': 'Compartilhar',
+    'common.loading': 'Carregando...',
+
+    'settings.title': 'Perfil e Configurações',
+    'settings.desc': 'Gerencie sua conta e preferências.',
+    'settings.guest': 'Visitante',
+    'settings.noAccount': 'Modo sem conta',
+    'settings.generated': 'Gerados',
+    'settings.logout': 'Sair',
+    'settings.logout.title': 'Sair?',
+    'settings.logout.desc': 'Você precisará entrar novamente para acessar seus roteiros e preferências.',
+    'settings.deleteAccount': 'Excluir minha conta',
+    'settings.delete.title': 'Excluir conta?',
+    'settings.delete.desc': 'Isso agendará sua conta para exclusão em 3 dias. Seus dados serão irrecuperáveis.',
+    'settings.preferences': 'Preferências',
+    'settings.darkMode': 'Modo escuro',
+    'settings.darkModeDesc': 'Inverter cores da interface',
+    'settings.language': 'Idioma',
+    'settings.languageDesc': 'Escolha o idioma da interface',
+    'settings.contact': 'Contatar a Equipe',
+    'settings.cgu': 'Termos de Serviço',
+    'settings.about': 'Sobre o Aria OS',
+
+    // Settings Account & Modals
+    'settings.account.deleting': 'Exclusão em andamento...',
+    'settings.account.deletingDesc': 'Sua conta está sendo destruída.',
+    'settings.account.scheduled': 'Exclusão agendada',
+    'settings.account.scheduledDesc': 'Sua conta será excluída definitivamente em',
+    'settings.account.cancelDelete': 'Cancelar exclusão',
+    'settings.account.deleteAccount': 'Excluir minha conta',
+    'settings.account.deleteWarning': 'Um prazo de 3 dias será aplicado antes da exclusão definitiva.',
+    'settings.modal.logoutTitle': 'Sair?',
+    'settings.modal.logoutDesc': 'Você precisará entrar novamente para acessar seus roteiros e preferências.',
+    'settings.modal.deleteTitle': 'Excluir conta?',
+    'settings.modal.deleteDesc': 'Esta ação agendará a exclusão da sua conta em 3 dias. Seus dados serão irrecuperáveis.',
+
+    'about.title': 'Sobre',
+    'about.version': 'Versão 4.0.0',
+    'about.desc': 'Aria OS é o workshop de conteúdo de mídia da próxima geração. Ele transforma qualquer fonte em roteiros potentes.',
+    'about.why': 'Por que Aria OS?',
+    'about.whyDesc': 'A palavra Aria evoca uma melodia expressiva. Aria OS ajuda você a compor sua própria trilha midiática.',
+    'about.footer': 'Projetado e desenvolvido por',
+
+    'legal.title': 'Avisos Legais e TDS',
+    'legal.tabs.cgu': 'Termos Gerais',
+    'legal.tabs.mentions': 'Avisos Legais',
+    'legal.tabs.privacy': 'Privacidade',
+    'legal.update': 'Última atualização: 14 de abril de 2026',
+
+    'history.title': 'Histórico',
+    'history.desc': 'Encontre e gerencie seus roteiros.',
+    'history.search': 'Pesquisar...',
+    'history.sort.recent': 'Mais Recentes',
+    'history.sort.old': 'Mais Antigos',
+    'history.sort.az': 'De A a Z',
+    'history.sort.za': 'De Z a A',
+    'history.tabs.active': 'Ativos',
+    'history.tabs.trash': 'Lixeira',
+    'history.empty': 'Nenhum roteiro gerado',
+    'history.emptyDesc': 'Suas criações futuras serão listadas aqui.',
+    'history.trash.empty': 'A lixeira está vazia',
+    'history.trash.emptyDesc': 'Os itens excluídos aparecerão aqui.',
+    'history.noResults': 'Nenhum resultado',
+    'history.searchEmptyDesc': 'Tente modificar sua pesquisa.',
+    'history.customTitle': 'Título personalizado...',
+    'history.actions.trash': 'Mover para a lixeira',
+    'history.actions.restore': 'Restaurar',
+    'history.actions.deleteForever': 'Excluir definitivamente',
+    'history.actions.delete': 'Excluir',
+    'history.modal.details': 'Detalhes do roteiro',
+    'history.modal.studio': 'Estúdio',
+    'history.trash.confirmTitle': 'Mover para a lixeira?',
+    'history.trash.confirmDesc': 'Este roteiro será movido para a lixeira e poderá ser restaurado.',
+    'history.trash.hardConfirmTitle': 'Exclusão definitiva',
+    'history.trash.hardConfirmDesc': 'Esta ação é irreversível. O roteiro será excluído para sempre.',
+
+    // Home
+    'home.ad1.badge': 'Teste Beta',
+    'home.ad1.title': 'Monetize seu conteúdo.',
+    'home.ad1.desc': 'Descubra nosso programa de parceria exclusivo para criadores ARIAOS.',
+    'home.ad2.badge': 'Novidade',
+    'home.ad2.title': 'Exportação Multi-Formato',
+    'home.ad2.desc': 'Baixe seus roteiros em PDF, Word e formato Teleprompter interativo.',
+    'home.ad3.badge': 'Análise',
+    'home.ad3.title': 'Entenda a audiência.',
+    'home.ad3.desc': 'Novas métricas de impacto disponíveis em seus projetos mais recentes.',
+    'home.steps.load': 'Carregar',
+    'home.steps.config': 'Configurar',
+    'home.steps.generate': 'Gerar',
+    'home.source.title': 'Fonte do conteúdo',
+    'home.source.desc': 'Cole uma URL (YouTube, Artigo, Blog...) ou texto simples.',
+    'home.source.url': 'URL',
+    'home.source.rawText': 'Texto Simples',
+    'home.source.placeholderUrl': 'https://...',
+    'home.source.placeholderText': 'Cole seu texto aqui...',
+    'home.source.errorUnsupported': 'Esta plataforma de vídeo não é suportada. Somente o YouTube é compatível.',
+    'home.source.errorInvalid': 'Por favor, insira uma URL válida (ex: https://...).',
+    'home.config.title': 'Assistente de Configuração',
+    'home.config.desc': 'Deixe-nos guiá-lo passo a passo para configurar o pedido perfeito.',
+    'home.config.q1': '1. Qual é o objetivo deste roteiro?',
+    'home.config.q2': '2. Qual tom editorial a IA deve adotar?',
+    'home.config.q3': '3. Qual deve ser meu posicionamento sobre o assunto?',
+    'home.config.q4': '4. Qual é a duração alvo do áudio?',
+    'home.intentions.ana': 'Analisar',
+    'home.intentions.crit': 'Criticar',
+    'home.intentions.expl': 'Explicar',
+    'home.intentions.reph': 'Reformular',
+    'home.intentions.deb': 'Debater',
+    'home.tones.fact': 'Factual (Neutro)',
+    'home.tones.punchy': 'Punchy (Dinâmico)',
+    'home.tones.sat': 'Satírico',
+    'home.tones.insp': 'Inspirador',
+    'home.tones.ana': 'Analítico',
+    'home.tones.drama': 'Dramático',
+    'home.stances.obj': 'Objetivo',
+    'home.stances.fav': 'Favorável (Elogioso)',
+    'home.stances.unfav': 'Desfavorável (Crítico)',
+    'home.durations.sec': 'seg',
+    'home.durations.min': 'min',
+    'home.durations.30s': '30 seg',
+    'home.durations.1m': '1 min',
+    'home.durations.2m': '2 min',
+    'home.durations.3m': '3 min',
+    'home.durations.5m': '5 min',
+    'home.actions.continue': 'Continuar',
+    'home.actions.back': 'Voltar',
+    'home.actions.generate': 'Gerar',
+    'home.actions.copy': 'Copiar',
+    'home.actions.download': 'Baixar',
+    'home.actions.new': 'Novo',
+    'home.actions.edit': 'Editar texto',
+    'home.actions.preview': 'Visualização Pro',
+    'home.actions.studio': 'Estúdio',
+    'home.actions.save': 'Salvar',
+    'home.actions.saved': 'Salvo',
+    'home.actions.share': 'Compartilhar',
+    'home.meta.words': 'palavras',
+    'home.meta.author': 'Autor',
+    'home.meta.anonAuthor': 'Autor Anônimo',
+    'home.meta.generatedAt': 'Gerado em',
+    'home.meta.at': 'às',
+    'home.meta.targetDuration': 'Duração alvo',
+    'home.meta.thinkingTime': 'Tempo de reflexão',
+    'home.meta.sourceText': 'Fonte de texto',
+    'home.meta.loadingDesc': 'Por favor, aguarde, isso pode levar alguns segundos dependendo da complexidade e do tamanho da fonte.',
+    'home.meta.writing': 'Escrevendo...',
+    'home.meta.placeholderResult': 'Seu roteiro aparecerá aqui...',
+    'home.ad.goToSlide': 'Ir para o slide',
+    'home.loading.m1': 'Analisando sua fonte de dados...',
+    'home.loading.m2': 'Extraindo a essência do conteúdo...',
+    'home.loading.m3': 'Estruturando a narração do roteiro...',
+    'home.loading.m4': 'Ajustando o tom profissional...',
+    'home.loading.m5': 'Refinando o estilo jornalístico...',
+    'home.loading.m6': 'Finalizando a redação...',
+    'home.loading.d1': 'A geração está demorando um pouco mais que o esperado...',
+    'home.loading.d2': 'Análises complexas em processamento...',
+    'home.loading.d3': 'A fonte é densa, estamos redobrando esforços...',
+    'home.loading.d4': 'Sua conexão com a internet pode estar lenta...',
+    'home.loading.d5': 'Não saia, os dados estão em montagem final...',
+
+    // Studio
+    'studio.actions.quit': 'Sair',
+    'studio.actions.selectScript': 'Selecionar roteiro',
+    'studio.permission.title': 'Permissão necessária',
+    'studio.permission.desc': 'Para filmar ou gravar sua voz, você deve permitir o acesso à sua câmera e microfone.',
+    'studio.permission.activate': 'Ativar câmera',
+    'studio.mode.audio': 'Modo Apenas Áudio',
+    'studio.actions.retake': 'Recomeçar',
+    'studio.actions.saving': 'Salvando...',
+    'studio.actions.save': 'Salvar',
+    'studio.settings.size': 'Tamanho',
+    'studio.settings.speed': 'Velocidade',
+    'studio.settings.mask': 'Máscara',
+    'studio.settings.shadow': 'Sombra',
+    'studio.actions.frontCam': 'Câmera Frontal',
+    'studio.actions.rearCam': 'Câmera Traseira',
+    'studio.actions.audioOnly': 'Apenas Áudio',
+    'studio.empty.title': 'Nenhum roteiro ativo',
+    'studio.empty.desc': 'Adicione um roteiro gerado ao teleprompter para facilitar sua gravação e melhorar sua elocução.',
+    'studio.empty.browse': 'Navegar pelos meus roteiros',
+    'studio.selector.title': 'Selecionar roteiro',
+    'studio.selector.empty': 'Nenhum roteiro disponível',
+    'studio.selector.emptyDesc': 'Você ainda não gerou nenhum roteiro.',
+    'studio.selector.create': 'Criar roteiro',
+    'studio.selector.loadMore': 'Carregar mais',
+
+    // Videos
+    'videos.hero.new': 'Nova Gravação',
+    'videos.hero.desc': 'Abrir o estúdio de gravação',
+    'videos.title': 'Meus Vídeos',
+    'videos.desc': 'Encontre e gerencie suas gravações.',
+    'videos.empty': 'Nenhum vídeo encontrado',
+    'videos.emptyDesc': 'Tente modificar sua pesquisa ou vá ao Studio para gravar um!',
+    'videos.actions.pin': 'Fixar',
+    'videos.actions.unpin': 'Desafixar',
+    'videos.actions.rename': 'Clique para renomear',
+    'videos.actions.whatsapp': 'Compartilhar no WhatsApp',
+    'videos.actions.emptyTrash': 'Esvaziar lixeira',
+    'videos.scriptModal.title': 'Roteiro do Vídeo',
+    'videos.loadMore': 'Carregar mais vídeos',
+
+    // Source Viewer
+    'source.videoPlayer': 'Reprodutor de Vídeo',
+    'source.browser': 'Navegador Interno',
+    'source.openNewTab': 'Abrir em uma nova aba',
+
+    // Notifications
+    'notif.title': 'Notificações',
+    'notif.desc': 'Fique informado sobre as atualizações.',
+    'notif.empty': 'Sem notificações',
+    'notif.emptyDesc': 'Você está atualizado! Novos anúncios aparecerão aqui.',
+    'notif.actions.markAsRead': 'Marcar como lida',
+    'notif.actions.delete': 'Excluir',
+    'notif.actions.deleteConfirm': 'Tem certeza que deseja excluir esta notificação?',
+
+    'login.welcome': 'Bem-vindo ao',
+    'login.desc': 'Entre para transformar instantaneamente suas fontes em roteiros de vídeo potentes.',
+    'login.google': 'Continuar com Google',
+    'login.anonymous': 'Testar como Visitante',
+    'login.anonymousWarn': 'O modo visitante é temporário. O salvamento está desativado.',
+    'login.cgu': 'Ao entrar, você concorda com nossos TDS.',
+
+    'legal.cgu.text': `
+      <h2 class="text-2xl font-bold text-black dark:text-white mb-2">Termos e Condições de Uso (TCU)</h2>
+      <p class="text-gray-500 mb-8">Última atualização: 14 de abril de 2026</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">Artigo 1: Objeto</h3>
+      <p>Os presentes Termos e Condições de Uso (doravante «TCU») têm por objeto definir as modalidades e condições em que a sociedade Mmedia Universe (doravante «o Editor») coloca à disposição dos utilizadores (doravante «o Utilizador») a aplicação Aria OS (doravante «a Aplicação»), bem como os direitos e obrigações das partes neste âmbito.</p>
+      <p>O acesso e a utilização da Aplicação estão sujeitos à aceitação e ao cumprimento dos presentes TCU. Ao criar uma conta ou utilizar a Aplicação, o Utilizador aceita expressamente e sem reservas os presentes TCU.</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">Artigo 2: Acesso à Aplicação</h3>
+      <p>A Aplicação é atualmente oferecida gratuitamente, reservando-se o Editor o direito de modificar as condições tarifárias no futuro. Todos os custos relativos ao acesso, sejam gastos de hardware, software ou de acesso à internet, são de exclusiva responsabilidade do Utilizador.</p>
+      <p>O acesso a certas funcionalidades requer a criação de uma conta de utilizador através do serviço de autenticação do Google (Google OAuth). O Utilizador compromete-se a fornecer informações exatas e a manter a confidencialidade das suas credenciais de login.</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">Artigo 3: Descrição do Serviço</h3>
+      <p>Aria OS é uma ferramenta profissional de auxílio à criação de conteúdo editorial. Permite nomeadamente:</p>
+      <ul class="list-disc pl-5 space-y-2 mt-2">
+        <li>A análise de conteúdos textuais, artigos ou vídeos (via URL), etc.</li>
+        <li>A geração automatizada de documentos, como roteiros calibrados para locução, através da nossa inteligência artificial.</li>
+        <li>O uso de um Estúdio de gravação de vídeo integrado (com teleprompter, gestão de tomadas, exportação de vídeo, etc.).</li>
+        <li>O salvamento, histórico de processos e o compartilhamento.</li>
+        <li>A exibição eventual de banners publicitários e conteúdos promocionais na interface, etc.</li>
+      </ul>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">Artigo 4: Propriedade Intelectual e Direitos de Autor</h3>
+      <p><strong>4.1. Direitos sobre a Aplicação:</strong> A arquitetura da Aplicação, as marcas, logótipos, grafismos, software, algoritmos e bases de dados são propriedade exclusiva da Mmedia Universe e estão protegidos pelo direito de propriedade intelectual. A plataforma conserva todos os direitos sobre a sua tecnologia, os seus algoritmos e a sua interface.</p>
+      <p><strong>4.2. Marcas de terceiros:</strong> As marcas e logótipos de terceiros (tais como YouTube, Reuters, etc.) exibidos na Aplicação pertencem aos seus respetivos proprietários. São utilizados unicamente para fins ilustrativos para indicar a compatibilidade da nossa ferramenta com estas plataformas. A Mmedia Universe não reivindica qualquer afiliação nem qualquer direito sobre estas marcas.</p>
+      <p><strong>4.3. Direitos sobre as fontes:</strong> O Utilizador compromete-se a não enviar para a Aplicação mais do que URLs ou textos para os quais disponha dos direitos necessários (direitos de autor, direito de citação, domínio público). O Editor declina qualquer responsabilidade em caso de análise de conteúdos protegidos enviados de forma fraudulenta pelo Utilizador.</p>
+      <p><strong>4.4. Direitos sobre os conteúdos gerados:</strong> O Utilizador dispõe do direito de explorar livremente, integralmente e comercialmente os roteiros gerados pela Aplicação. O Editor não reivindica qualquer direito de autor sobre os textos finais produzidos pelo Utilizador através da Aplicação.</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">Artigo 5: Responsabilidade e Limites da IA</h3>
+      <p>A Aplicação apoia-se em modelos de Inteligência Artificial avançados para analisar as fontes fornecidas e estruturar o conteúdo segundo formatos otimizados para locução. A nossa tecnologia combina estes modelos com processos de análise exclusivos para garantir um resultado profissional, sem que os detalhes dos nossos algoritmos internos sejam públicos. O Utilizador reconhece que:</p>
+      <ul class="list-disc pl-5 space-y-2 mt-2">
+        <li>A IA pode gerar informações imprecisas, incompletas ou obsoletas (fenómeno de alucinação).</li>
+        <li>É de responsabilidade exclusiva do Utilizador (como criador de conteúdo ou jornalista) verificar, fact-checker e validar os roteiros antes de qualquer publicação ou gravação.</li>
+      </ul>
+      <p>Mmedia Universe não poderá em caso algum ser responsabilizada por danos diretos ou indiretos resultantes da utilização dos roteiros gerados (difamação, fake news, prejuízo comercial).</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">Artigo 6: Disponibilidade do Serviço</h3>
+      <p>O Editor esforça-se por manter a Aplicação acessível 24/7, mas não está sujeito a qualquer obrigação de resultado. O Editor reserva-se o direito de suspender, interromper ou limitar o acesso a toda ou parte da Aplicação por razões de manutenção ou atualização.</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">Artigo 7: Modificação dos TCU</h3>
+      <p>Mmedia Universe reserva-se o direito de modificar os presentes TCU em qualquer momento. Os Utilizadores serão informados de qualquer modificação substancial. O uso continuado da Aplicação após a modificação implica a aceitação dos novos TCU.</p>
+    `,
+    'legal.mentions.text': `
+      <h2 class="text-2xl font-bold text-black dark:text-white mb-2">Avisos Legais</h2>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">1. Editor da Aplicação</h3>
+      <p>A aplicação <strong>Aria OS</strong> é editada e operada por:</p>
+      <p class="mt-2">
+        <strong>Mmedia Universe</strong><br>
+        Mimongo, Gabão<br>
+        Capital social: 7.000.000 FCFA
+      </p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">2. Contacte-nos</h3>
+      <p>
+        Telefone: <strong>+241 66 17 10 36</strong><br>
+        Email: <strong>enjoymegabon&#64;gmail.com</strong>
+      </p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">3. Alojamento</h3>
+      <p>A Aplicação e as suas bases de dados são alojadas por:</p>
+      <p class="mt-2">
+        <strong>Google Cloud Platform (GCP) / Firebase</strong><br>
+        Google Ireland Limited<br>
+        Gordon House, Barrow Street<br>
+        Dublin 4, Irlanda
+      </p>
+    `,
+    'legal.privacy.text': `
+      <h2 class="text-2xl font-bold text-black dark:text-white mb-2">Política de Privacidade e Cookies</h2>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">1. Recolha de Dados Pessoais</h3>
+      <p>No âmbito da utilização da Aplicação Aria OS, recolhemos os seguintes dados:</p>
+      <ul class="list-disc pl-5 space-y-2 mt-2">
+        <li><strong>Dados de identificação:</strong> Nome, apelido, endereço de e-mail e foto de perfil (fornecidos pelo Google durante o login OAuth).</li>
+        <li><strong>Dados de utilização:</strong> Histórico de roteiros gerados, URLs enviadas, textos analisados, parâmetros de geração (tom, duração).</li>
+        <li><strong>Dados técnicos:</strong> Identificadores de ligação (UID Firebase).</li>
+      </ul>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">2. Finalidade do Tratamento</h3>
+      <p>Os seus dados são tratados para as seguintes finalidades:</p>
+      <ul class="list-disc pl-5 space-y-2 mt-2">
+        <li>Fornecer o serviço de geração de roteiros.</li>
+        <li>Permitir o salvamento e a consulta do seu histórico pessoal.</li>
+        <li>Assegurar a segurança da Aplicação e prevenir abusos (limitação de quotas).</li>
+        <li>Melhorar os nossos algoritmos de geração e as nossas ofertas (de forma anonimizada), etc.</li>
+      </ul>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">3. Conservação dos Dados</h3>
+      <p>Os seus dados de identificação e o seu histórico são conservados enquanto a sua conta estiver ativa. Dispõe de uma funcionalidade nos ajustes da Aplicação que permite <strong>eliminar definitivamente a sua conta e a totalidade dos seus dados</strong>. Uma vez realizada esta ação, os dados são irrecuperáveis.</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">4. Partilha de Dados</h3>
+      <p>Os seus dados <strong>nunca são vendidos</strong> a terceiros. São partilhados unicamente com os nossos subcontratados técnicos estritamente necessários ao funcionamento do serviço, e especialmente:</p>
+      <ul class="list-disc pl-5 space-y-2 mt-2">
+        <li><strong>Google Firebase:</strong> Para o alojamento da base de dados e a autenticação.</li>
+        <li><strong>Google Gemini API:</strong> Os textos e URLs que envia são remetidos à API Gemini para uma análise básica. Estes dados não são utilizados pelo Google para treinar os seus modelos públicos.</li>
+        <li><strong>ARIA OS (Agente IA):</strong> A inteligência artificial interna que atua como uma camada superior. Processa os dados brutos para extrair roteiros altamente pertinentes e calibrados, etc.</li>
+        <li><strong>Cakenews Labs:</strong> Entidade da Mmedia Universe responsável pelo desenvolvimento da arquitetura técnica da Aria OS. As suas equipas trocam dados com o agente ARIA OS, especialmente com o fim de alimentar e otimizar a plataforma de informação de terceiros Cakenews.</li>
+      </ul>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">5. Política de Cookies</h3>
+      <p>A Aplicação Aria OS utiliza cookies e tecnologias semelhantes (Local Storage, Session Storage) de maneira muito limitada e <strong>unicamente por razões técnicas estritamente necessárias</strong>:</p>
+      <ul class="list-disc pl-5 space-y-2 mt-2">
+        <li><strong>Cookies de autenticação (Firebase Auth):</strong> Permitem manter a sua sessão ativa sem ter que voltar a ligar-se em cada visita.</li>
+        <li><strong>Preferências locais:</strong> Salvamento do seu tema (claro/escuro).</li>
+      </ul>
+      <p><strong>Não é utilizado qualquer cookie publicitário ou de rastreio de terceiros (tipo Google Analytics ou Meta Pixel) nesta Aplicação.</strong> Portanto, não é necessária qualquer faixa de consentimento de cookies no sentido da regulamentação (RGPD), estando os cookies técnicos isentos de consentimento prévio.</p>
+      
+      <h3 class="text-lg font-bold text-black dark:text-white mt-8 mb-4">6. Os Seus Direitos</h3>
+      <p>Conforme a regulamentação aplicável em matéria de proteção de dados, dispõe de um direito de acesso, retificação, eliminação e portabilidade dos seus dados. Para exercer estes direitos, pode utilizar as opções de eliminação na Aplicação ou contactar-nos através do número indicado nos Avisos Legais.</p>
+    `
+  }
+};
+
+@Injectable({ providedIn: 'root' })
+export class LanguageService {
+  public currentLang = signal<Language>('fr');
+
+  constructor() {
+    const saved = localStorage.getItem('aria_os_lang') as Language;
+    if (saved) {
+      this.setLanguage(saved);
+    } else {
+      this.applyLanguage('fr');
+    }
+  }
+
+  setLanguage(lang: Language) {
+    this.currentLang.set(lang);
+    localStorage.setItem('aria_os_lang', lang);
+    this.applyLanguage(lang);
+  }
+
+  private applyLanguage(lang: Language) {
+    document.documentElement.lang = lang;
+    if (lang === 'ar') {
+      document.documentElement.dir = 'rtl';
+      document.body.dir = 'rtl';
+    } else {
+      document.documentElement.dir = 'ltr';
+      document.body.dir = 'ltr';
+    }
+  }
+
+  translate(key: string): string {
+    const lang = this.currentLang();
+    return TRANSLATIONS[lang]?.[key] || TRANSLATIONS['fr']?.[key] || key;
+  }
+}
