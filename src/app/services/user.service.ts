@@ -19,6 +19,8 @@ export interface UserProfile {
   lastGenerationDate?: Date;
   scheduledDeletionDate?: Date;
   preferences?: UserPreferences;
+  readNotifications?: string[];
+  deletedNotifications?: string[];
 }
 
 @Injectable({
@@ -37,7 +39,9 @@ export class UserService {
       anonymousGenerationCount: row['anonymous_generation_count'] as number | undefined,
       lastGenerationDate: row['last_generation_date'] ? new Date(row['last_generation_date'] as string) : undefined,
       scheduledDeletionDate: row['scheduled_deletion_date'] ? new Date(row['scheduled_deletion_date'] as string) : undefined,
-      preferences: row['preferences'] as UserPreferences | undefined
+      preferences: row['preferences'] as UserPreferences | undefined,
+      readNotifications: (row['read_notifications'] as string[]) || [],
+      deletedNotifications: (row['deleted_notifications'] as string[]) || []
     };
   }
 

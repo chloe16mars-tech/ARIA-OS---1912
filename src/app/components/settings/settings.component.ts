@@ -42,7 +42,7 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
               </div>
               <div class="flex flex-col">
                 <span class="text-[9px] text-gray-500 font-black uppercase tracking-[0.15em] mb-1">{{ 'settings.generated' | translate }}</span>
-                <span class="text-3xl font-black text-gray-900 dark:text-white leading-none font-mono tracking-tighter">{{ formatCompactNumber(userProfile()?.generation_count || 0) }}</span>
+                <span class="text-3xl font-black text-gray-900 dark:text-white leading-none font-mono tracking-tighter">{{ formatCompactNumber(userProfile()?.generationCount || 0) }}</span>
               </div>
             </div>
           </div>
@@ -62,7 +62,7 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
               <p class="text-red-600 dark:text-red-400 font-semibold">{{ 'settings.account.deleting' | translate }}</p>
               <p class="text-sm text-red-500 mt-1">{{ 'settings.account.deletingDesc' | translate }}</p>
             </div>
-          } @else if (userProfile()?.scheduled_deletion_date) {
+          } @else if (userProfile()?.scheduledDeletionDate) {
             <div class="bg-gray-50 dark:bg-[#1C1C1E] border border-gray-200 dark:border-gray-800 rounded-2xl p-5 mb-4">
               <div class="flex items-start gap-4">
                 <div class="bg-gray-200 dark:bg-[#2C2C2E] p-2 rounded-full">
@@ -71,7 +71,7 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
                 <div>
                   <h4 class="text-gray-900 dark:text-white font-semibold">{{ 'settings.account.scheduled' | translate }}</h4>
                   <p class="text-gray-600 dark:text-gray-400 text-sm mt-1">
-                    {{ 'settings.account.scheduledDesc' | translate }} <span class="font-semibold">{{ userProfile()?.scheduled_deletion_date | date:'dd/MM/yyyy HH:mm' }}</span>.
+                    {{ 'settings.account.scheduledDesc' | translate }} <span class="font-semibold">{{ userProfile()?.scheduledDeletionDate | date:'dd/MM/yyyy HH:mm' }}</span>.
                   </p>
                 </div>
               </div>
@@ -251,8 +251,8 @@ export class SettingsComponent implements OnInit, OnDestroy {
       this.userProfile.set(data);
       
       // Proactive Cold Deletion logic on frontend if it wasn't caught by the backend yet
-      if (data?.scheduled_deletion_date) {
-         const deletionTime = new Date(data.scheduled_deletion_date).getTime();
+      if (data?.scheduledDeletionDate) {
+         const deletionTime = new Date(data.scheduledDeletionDate).getTime();
          const now = new Date().getTime();
          if (now >= deletionTime && !this.isDeleting()) {
              this.isDeleting.set(true);

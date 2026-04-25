@@ -15,14 +15,10 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
       
       <!-- Video Preview / Placeholder -->
       <div class="relative aspect-video bg-gray-900 overflow-hidden">
-        @if (video.thumbnailUrl) {
-          <img [src]="video.thumbnailUrl" class="w-full h-full object-cover opacity-60 group-hover:scale-110 transition-transform duration-700">
-        } @else {
-          <div class="w-full h-full flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-gray-900 to-black">
-            <mat-icon class="text-4xl text-white/20">videocam</mat-icon>
-            <span class="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">ARIA Media</span>
-          </div>
-        }
+        <div class="w-full h-full flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-gray-900 to-black">
+          <mat-icon class="text-4xl text-white/20">videocam</mat-icon>
+          <span class="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">ARIA Media</span>
+        </div>
         
         <!-- Play Overlay -->
         <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 backdrop-blur-[2px]">

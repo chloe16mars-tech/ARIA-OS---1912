@@ -152,7 +152,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   selectedStanceKey = signal<string | null>(null);
   selectedDurationKey = signal<string | null>(null);
 
-  is_anonymous = computed(() => this.authService.user()?.is_anonymous ?? true);
+  isAnonymousUser = computed(() => this.authService.isAnonymous());
 
   urlError = computed(() => {
     const url = this.sourceUrl().trim();
@@ -179,7 +179,7 @@ export class HomeComponent implements OnInit, OnDestroy {
        const stance = this.selectedStanceKey();
        const duration = this.selectedDurationKey();
        
-       if (!this.is_anonymous() && intent && tone && stance && duration) {
+       if (!this.isAnonymousUser() && intent && tone && stance && duration) {
           this.userService.saveUserPreferences({ intention: intent, tone, stance, duration });
        }
     });
@@ -193,7 +193,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit() {
-    if (!this.is_anonymous()) {
+    if (!this.isAnonymousUser()) {
       this.unsubscribeProfile = this.userService.getUserProfileSnapshot(profile => {
         if (profile?.preferences && this.currentStep() < 3) {
            const p = profile.preferences;
@@ -211,8 +211,8 @@ export class HomeComponent implements OnInit, OnDestroy {
   }
 
   private loadScriptToEdit(script: ScriptData) {
-    if (script.source_url) this.sourceUrl.set(script.source_url);
-    if (script.source_text) this.sourceText.set(script.source_text);
+    if (script.sourceUrl) this.sourceUrl.set(script.sourceUrl);
+    if (script.sourceText) this.sourceText.set(script.sourceText);
     this.selectedIntentionKey.set(this.intentions.find(i => i.val === script.intention)?.key || null);
     this.selectedToneKey.set(this.tones.find(t => t.val === script.tone)?.key || null);
     this.selectedStanceKey.set(this.stances.find(s => s.val === script.stance)?.key || null);

@@ -94,7 +94,7 @@ export class NotificationsComponent implements OnInit, OnDestroy {
   private unsubProfile?: () => void;
 
   visibleNotifications = computed(() => {
-    const deleted = this.userProfile()?.deleted_notifications || [];
+    const deleted = this.userProfile()?.deletedNotifications || [];
     return this.notifications().filter(n => !deleted.includes(n.id!));
   });
 
@@ -122,7 +122,7 @@ export class NotificationsComponent implements OnInit, OnDestroy {
   }
 
   isRead(id: string): boolean {
-    return this.userProfile()?.read_notifications?.includes(id) || false;
+    return this.userProfile()?.readNotifications?.includes(id) || false;
   }
 
   getIcon(type: string): string {

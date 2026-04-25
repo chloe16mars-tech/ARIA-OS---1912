@@ -92,10 +92,10 @@ const generateScriptSchema = z.object({
     .min(10, 'Le texte source doit contenir au moins 10 caractères')
     .max(8000, 'Le texte source ne peut pas dépasser 8000 caractères')
     .optional(),
-  intention: z.enum(ALLOWED_INTENTIONS, { errorMap: () => ({ message: 'Intention invalide.' }) }),
-  tone: z.enum(ALLOWED_TONES, { errorMap: () => ({ message: 'Ton invalide.' }) }),
-  stance: z.enum(ALLOWED_STANCES, { errorMap: () => ({ message: 'Parti pris invalide.' }) }),
-  duration: z.enum(ALLOWED_DURATIONS, { errorMap: () => ({ message: 'Durée invalide.' }) }),
+  intention: z.enum(ALLOWED_INTENTIONS, { invalid_type_error: 'Intention invalide.' }),
+  tone: z.enum(ALLOWED_TONES, { invalid_type_error: 'Ton invalide.' }),
+  stance: z.enum(ALLOWED_STANCES, { invalid_type_error: 'Parti pris invalide.' }),
+  duration: z.enum(ALLOWED_DURATIONS, { invalid_type_error: 'Durée invalide.' }),
 }).refine(
   (data) => data.sourceUrl || data.sourceText,
   { message: 'Une source est requise : URL ou texte.' }
@@ -137,7 +137,7 @@ apiRouter.post('/generate-script', generateScriptLimiter, async (req: Request, r
     // 2. Valider et parser les inputs
     const parseResult = generateScriptSchema.safeParse(req.body);
     if (!parseResult.success) {
-      const firstError = parseResult.error.errors[0]?.message ?? 'Données invalides.';
+      const firstError = parseResult.error.issues[0]?.message ?? 'Données invalides.';
       res.status(400).json({ error: firstError });
       return;
     }

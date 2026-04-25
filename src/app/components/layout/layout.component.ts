@@ -119,8 +119,8 @@ export class LayoutComponent implements OnInit, OnDestroy {
     const profile = this.userProfile();
     if (!profile) return 0;
     
-    const deleted = profile.deleted_notifications || [];
-    const read = profile.read_notifications || [];
+    const deleted = profile.deletedNotifications || [];
+    const read = profile.readNotifications || [];
     
     return notifs.filter(n => !deleted.includes(n.id!) && !read.includes(n.id!)).length;
   });

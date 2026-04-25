@@ -1,9 +1,19 @@
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef, signal, computed, effect, inject, NgZone, ChangeDetectionStrategy } from '@angular/core';
+import { CommonModule, Location } from '@angular/common';
+import { Router } from '@angular/router';
+import { MatIconModule } from '@angular/material/icon';
+import { TranslatePipe } from '../../pipes/translate.pipe';
+
+import { VideoService } from '../../services/video.service';
+import { ToastService } from '../../services/toast.service';
+import { ScriptService, ScriptData } from '../../services/script.service';
+import { HapticService } from '../../services/haptic.service';
+
 import { CameraPreviewComponent } from './camera-preview.component';
 import { TeleprompterComponent } from './teleprompter.component';
 import { RecordingControlsComponent } from './recording-controls.component';
 import { ScriptSelectorComponent } from './script-selector.component';
 import { StudioSettingsComponent } from './studio-settings.component';
-import { HapticService } from '../../services/haptic.service';
 
 @Component({
   selector: 'app-studio',

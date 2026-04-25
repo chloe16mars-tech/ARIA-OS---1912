@@ -12,7 +12,6 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
 
 import { ScriptCardComponent } from './script-card.component';
 import { ScriptDetailsModalComponent } from './script-details-modal.component';
-import { SourceViewerComponent } from '../source-viewer/source-viewer.component';
 
 @Component({
   selector: 'app-history',
@@ -24,8 +23,7 @@ import { SourceViewerComponent } from '../source-viewer/source-viewer.component'
     MatIconModule,
     TranslatePipe,
     ScriptCardComponent,
-    ScriptDetailsModalComponent,
-    SourceViewerComponent
+    ScriptDetailsModalComponent
   ],
   template: `
     <div class="p-6 max-w-5xl mx-auto space-y-12 pb-32 animate-in fade-in duration-700">
