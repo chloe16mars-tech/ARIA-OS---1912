@@ -3,11 +3,11 @@
   "public": true,
   "name": "aria-os",
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/src/server.ts" },
+    { "source": "/api/(.*)", "destination": "/api/index.ts" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "functions": {
-    "src/server.ts": {
+    "api/index.ts": {
       "maxDuration": 60,
       "memory": 1024
     }
