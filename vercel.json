@@ -3,14 +3,13 @@
   "public": true,
   "name": "aria-os",
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api" },
+    { "source": "/api/(.*)", "destination": "/src/server.ts" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "functions": {
     "src/server.ts": {
-      "runtime": "vercel-node@latest",
-      "memory": 1024,
-      "maxDuration": 60
+      "maxDuration": 60,
+      "memory": 1024
     }
   }
 }
