@@ -1,204 +1,280 @@
-import { Router } from 'express';
+import { Router, Request, Response } from 'express';
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenAI } from '@google/genai';
+import rateLimit from 'express-rate-limit';
+import { z } from 'zod';
 
 export const apiRouter = Router();
 
-// Initialize Supabase Admin client
+// ─────────────────────────────────────────────────────────────────────────────
+// Supabase Admin Client (server-side only — service role key NEVER sent to client)
+// ─────────────────────────────────────────────────────────────────────────────
+
 const supabaseUrl = process.env['SUPABASE_URL'];
 const supabaseServiceKey = process.env['SUPABASE_SERVICE_ROLE_KEY'];
 
 if (!supabaseUrl || !supabaseServiceKey) {
-  console.warn("Supabase Admin SDK init failed. Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in environment.");
+  console.error('[API] FATAL: Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY. Server will not function correctly.');
 }
 
-const supabaseAdmin = createClient(supabaseUrl || '', supabaseServiceKey || '', {
+const supabaseAdmin = createClient(supabaseUrl ?? '', supabaseServiceKey ?? '', {
   auth: {
     autoRefreshToken: false,
     persistSession: false
   }
 });
 
-apiRouter.post('/generate-script', async (req, res): Promise<any> => {
+// ─────────────────────────────────────────────────────────────────────────────
+// Rate Limiting — protège contre le spam, les bots et les attaques DDoS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Limite générale sur toutes les routes API */
+const globalApiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Trop de requêtes. Veuillez patienter quelques minutes.' },
+});
+
+/** Limite stricte sur la génération de script (opération coûteuse) */
+const generateScriptLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 heure
+  max: 20, // max 20 générations par IP par heure
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Limite de génération atteinte. Réessayez dans une heure.' },
+});
+
+/** Limite stricte sur la suppression de compte */
+const deleteAccountLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 heure
+  max: 3, // max 3 tentatives par IP par heure
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Trop de tentatives de suppression de compte.' },
+});
+
+// Appliquer le rate limiter global sur toutes les routes de ce router
+apiRouter.use(globalApiLimiter);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Schémas de validation Zod — tous les inputs serveur sont validés
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ALLOWED_INTENTIONS = ['Résumer', 'Analyser', 'Critiquer', 'Expliquer', 'Reformuler', 'Débattre'] as const;
+const ALLOWED_TONES = ['Factuel (Neutre)', 'Punchy (Dynamique)', 'Satyrique', 'Inspirant', 'Analytique', 'Dramatique'] as const;
+const ALLOWED_STANCES = ['Objectif', 'Favorable (Élogieux)', 'Défavorable (À charge)'] as const;
+const ALLOWED_DURATIONS = ['30 sec', '1 min', '2 min', '3 min', '5 min'] as const;
+
+const generateScriptSchema = z.object({
+  sourceUrl: z.string()
+    .url('URL invalide')
+    .max(2048, 'URL trop longue')
+    .refine(
+      (url) => {
+        // Bloquer les URLs locales (SSRF protection)
+        const lower = url.toLowerCase();
+        return !lower.includes('localhost') &&
+               !lower.includes('127.0.0.1') &&
+               !lower.includes('0.0.0.0') &&
+               !lower.includes('::1') &&
+               !lower.includes('169.254') &&
+               !lower.includes('10.') &&
+               !lower.includes('192.168.') &&
+               !lower.startsWith('file://') &&
+               !lower.startsWith('ftp://');
+      },
+      { message: 'URL non autorisée.' }
+    )
+    .optional(),
+  sourceText: z.string()
+    .min(10, 'Le texte source doit contenir au moins 10 caractères')
+    .max(8000, 'Le texte source ne peut pas dépasser 8000 caractères')
+    .optional(),
+  intention: z.enum(ALLOWED_INTENTIONS, { errorMap: () => ({ message: 'Intention invalide.' }) }),
+  tone: z.enum(ALLOWED_TONES, { errorMap: () => ({ message: 'Ton invalide.' }) }),
+  stance: z.enum(ALLOWED_STANCES, { errorMap: () => ({ message: 'Parti pris invalide.' }) }),
+  duration: z.enum(ALLOWED_DURATIONS, { errorMap: () => ({ message: 'Durée invalide.' }) }),
+}).refine(
+  (data) => data.sourceUrl || data.sourceText,
+  { message: 'Une source est requise : URL ou texte.' }
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers d'authentification
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function verifyJwt(req: Request, res: Response): Promise<{ id: string; is_anonymous: boolean } | null> {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    res.status(401).json({ error: 'Unauthorized: Token manquant ou invalide.' });
+    return null;
+  }
+
+  const jwt = authHeader.split('Bearer ')[1];
+  const { data: { user }, error } = await supabaseAdmin.auth.getUser(jwt);
+
+  if (error || !user) {
+    res.status(401).json({ error: 'Unauthorized: Vérification du token échouée.' });
+    return null;
+  }
+
+  return { id: user.id, is_anonymous: user.is_anonymous ?? false };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/generate-script
+// Génère un script voice-over avec Gemini AI via streaming SSE.
+// ─────────────────────────────────────────────────────────────────────────────
+
+apiRouter.post('/generate-script', generateScriptLimiter, async (req: Request, res: Response): Promise<void> => {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Unauthorized: Missing or invalid token' });
+    // 1. Vérifier l'authentification
+    const user = await verifyJwt(req, res);
+    if (!user) return;
+
+    // 2. Valider et parser les inputs
+    const parseResult = generateScriptSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      const firstError = parseResult.error.errors[0]?.message ?? 'Données invalides.';
+      res.status(400).json({ error: firstError });
+      return;
     }
+    const { sourceUrl, sourceText, intention, tone, stance, duration } = parseResult.data;
 
-    const jwt = authHeader.split('Bearer ')[1];
-    
-    // Verify user JWT with Supabase Admin
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(jwt);
-    if (authError || !user) {
-      return res.status(401).json({ error: 'Unauthorized: Token verification failed' });
-    }
+    // 3. Vérifier le quota anonyme via RPC atomique (évite les race conditions)
+    if (user.is_anonymous) {
+      const { data: quotaData, error: quotaError } = await supabaseAdmin
+        .rpc('check_anonymous_quota', { p_user_id: user.id });
 
-    const uid = user.id;
-    const isAnonymous = user.is_anonymous;
+      if (quotaError) {
+        console.error('[API] Quota RPC error:', quotaError);
+        res.status(500).json({ error: 'Erreur lors de la vérification du quota.' });
+        return;
+      }
 
-    // Quota Logic with Supabase
-    if (isAnonymous) {
-      const { data: userData, error: userError } = await supabaseAdmin
-        .from('users')
-        .select('anonymous_generation_count, last_generation_date')
-        .eq('id', uid)
-        .single();
-        
-      if (!userError && userData) {
-        const lastGenDateStr = userData.last_generation_date;
-        const count = userData.anonymous_generation_count || 0;
-
-        if (lastGenDateStr) {
-          const lastGen = new Date(lastGenDateStr);
-          const now = new Date();
-          const diffHours = (now.getTime() - lastGen.getTime()) / (1000 * 60 * 60);
-
-          if (diffHours < 24 && count >= 2) {
-            return res.status(429).json({ error: 'Quota dépassé. Limite atteinte pour les comptes anonymes.' });
-          }
-        }
+      if (!quotaData) {
+        res.status(429).json({
+          error: 'Quota dépassé. Les comptes anonymes sont limités à 2 générations par 24h. Créez un compte pour continuer.'
+        });
+        return;
       }
     }
 
-    const { sourceUrl, sourceText, intention, tone, stance, duration } = req.body;
+    // 4. Vérifier la clé Gemini
+    if (!process.env['GEMINI_API_KEY']) {
+      console.error('[API] FATAL: GEMINI_API_KEY is not set');
+      res.status(500).json({ error: 'Configuration serveur incomplète. Contactez l\'administrateur.' });
+      return;
+    }
 
-    let type: 'video' | 'article' | 'social' | 'text' = 'text';
-    const model = 'gemini-3.1-pro-preview';
+    // 5. Construire le prompt
+    let sourceType: 'video' | 'article' | 'social' | 'text' = 'text';
     let tools: Record<string, unknown>[] = [];
     let prompt = '';
 
     if (sourceUrl) {
-      if (sourceUrl.includes('youtube.com') || sourceUrl.includes('youtu.be')) {
-        type = 'video';
-        prompt = `Analyze the video at this URL: ${sourceUrl}. `;
+      const lowerUrl = sourceUrl.toLowerCase();
+      if (lowerUrl.includes('youtube.com') || lowerUrl.includes('youtu.be')) {
+        sourceType = 'video';
+        prompt = `Analyse la vidéo à cette URL : ${sourceUrl}. `;
         tools = [{ googleSearch: {} }];
-      } else if (sourceUrl.includes('facebook.com') || sourceUrl.includes('twitter.com') || sourceUrl.includes('x.com')) {
-        type = 'social';
-        prompt = `Analyze the social media post at this URL: ${sourceUrl}. `;
+      } else if (
+        lowerUrl.includes('facebook.com') ||
+        lowerUrl.includes('twitter.com') ||
+        lowerUrl.includes('x.com')
+      ) {
+        sourceType = 'social';
+        prompt = `Analyse la publication sur les réseaux sociaux à cette URL : ${sourceUrl}. `;
         tools = [{ googleSearch: {} }];
       } else {
-        type = 'article';
-        prompt = `Analyze the article at this URL: ${sourceUrl}. `;
+        sourceType = 'article';
+        prompt = `Analyse l'article à cette URL : ${sourceUrl}. `;
         tools = [{ googleSearch: {} }];
       }
-    } else {
-      type = 'text';
-      prompt = `Analyze the following text: "${sourceText}". `;
+    } else if (sourceText) {
+      sourceType = 'text';
+      // Limite la longueur du texte source dans le prompt pour éviter les injections massives
+      const safeText = sourceText.slice(0, 6000);
+      prompt = `Analyse le texte suivant : """${safeText}""". `;
     }
 
     prompt += `
-Your task is to generate a highly professional script for a voice-over based on the provided source.
-Intention: ${intention}
-Tone: ${tone}
-Stance / Bias (Parti pris): ${stance}
-Target Duration: ${duration}
+Ta mission est de générer un script professionnel pour une voix off basé sur la source fournie.
+Intention : ${intention}
+Ton : ${tone}
+Parti pris : ${stance}
+Durée cible : ${duration}
 
-CRITICAL INSTRUCTIONS FOR FORMATTING:
-1. DO NOT include conversational filler like "Voici un script...".
-2. DO NOT include meta-commentary about word count or duration.
-3. Start IMMEDIATELY with a brief 1-2 sentence explanation of how you adapted the subject to match the requested tone, intention, and stance.
-4. You MUST wrap the actual spoken voice-over script inside exactly <script_pro> and </script_pro> XML-like tags. This is mandatory for the application's teleprompter to extract the text seamlessly. DO NOT put headings, stage directions, or markdown inside the <script_pro> tags. ONLY the raw, readable, punctuated spoken text.
-5. Provide recording tips outside and after the tags.
+INSTRUCTIONS CRITIQUES DE FORMATAGE :
+1. Ne commence PAS par des formules de politesse comme "Voici un script...".
+2. N'inclus PAS de méta-commentaires sur le nombre de mots ou la durée.
+3. Commence par une brève explication (1-2 phrases) de la façon dont tu as adapté le sujet au ton, à l'intention et au parti pris demandés.
+4. TU DOIS envelopper le texte de la voix off dans des balises XML exactement <script_pro> et </script_pro>. C'est OBLIGATOIRE pour le téléprompter. N'inclus PAS de titres, de didascalies ou de markdown dans les balises <script_pro>. UNIQUEMENT le texte lu, ponctué, naturel.
+5. Fournis des conseils d'enregistrement à l'extérieur et après les balises.
 
-Write all content in French. Make it sound natural and professional for a video creator.
+Rédige tout le contenu en français. Donne un résultat naturel et professionnel pour un créateur vidéo.
 `;
 
-    if (!process.env['GEMINI_API_KEY']) {
-      return res.status(500).json({ error: 'La clé API Gemini est absente de la configuration du serveur.' });
-    }
-
-    const ai = new GoogleGenAI({ apiKey: process.env['GEMINI_API_KEY'] });
-    
+    // 6. Initialiser et configurer les SSE
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // Désactive le buffering Nginx pour les SSE
+
+    // 7. Appeler Gemini en streaming
+    const ai = new GoogleGenAI({ apiKey: process.env['GEMINI_API_KEY'] });
 
     const responseStream = await ai.models.generateContentStream({
-      model: model,
+      model: 'gemini-2.5-pro-preview-05-06',
       contents: prompt,
       config: {
-        tools: tools.length > 0 ? tools : undefined
+        tools: tools.length > 0 ? (tools as Parameters<typeof ai.models.generateContentStream>[0]['config'] extends { tools?: infer T } ? T : never) : undefined,
       }
     });
 
-    let fullText = '';
     for await (const chunk of responseStream) {
       if (chunk.text) {
-        fullText += chunk.text;
         res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
       }
     }
-    
-    // Update Quotas & Stats Securely AFTER successful generation
+
+    // 8. Mettre à jour les quotas et stats de façon atomique APRÈS la génération réussie
     try {
-      // 1. Update Global Stats (using RPC if possible, otherwise read/write)
-      const { data: globalData } = await supabaseAdmin
-        .from('global_stats')
-        .select('total_generations')
-        .eq('id', 1)
-        .single();
-        
-      if (globalData) {
-         await supabaseAdmin
-           .from('global_stats')
-           .update({ total_generations: (globalData.total_generations || 0) + 1 })
-           .eq('id', 1);
+      // Incrément atomique du compteur global via RPC
+      await supabaseAdmin.rpc('increment_global_generations');
+
+      // Incrément du compteur utilisateur
+      if (user.is_anonymous) {
+        await supabaseAdmin.rpc('increment_anonymous_generation_count', { p_user_id: user.id });
+      } else {
+        await supabaseAdmin.rpc('increment_user_generation_count', { p_user_id: user.id });
       }
-
-      // 2. Update User Stats
-      const { data: userData } = await supabaseAdmin
-        .from('users')
-        .select('anonymous_generation_count, generation_count, last_generation_date')
-        .eq('id', uid)
-        .single();
-
-      if (userData) {
-        if (isAnonymous) {
-          const lastGenDateStr = userData.last_generation_date;
-          const existingCount = userData.anonymous_generation_count || 0;
-          let countToSet = 1;
-
-          if (lastGenDateStr) {
-            const lastGen = new Date(lastGenDateStr);
-            const now = new Date();
-            const diffHours = (now.getTime() - lastGen.getTime()) / (1000 * 60 * 60);
-            if (diffHours < 24) {
-              countToSet = existingCount + 1;
-            }
-          }
-          await supabaseAdmin
-            .from('users')
-            .update({ 
-              anonymous_generation_count: countToSet,
-              last_generation_date: new Date().toISOString()
-            })
-            .eq('id', uid);
-        } else {
-          await supabaseAdmin
-            .from('users')
-            .update({ 
-              generation_count: (userData.generation_count || 0) + 1,
-              last_generation_date: new Date().toISOString()
-            })
-            .eq('id', uid);
-        }
-      }
-    } catch (e) {
-      console.error("Failed to update stats transaction", e);
+    } catch (statsError) {
+      // Les erreurs de stats ne doivent pas bloquer la réponse utilisateur
+      console.error('[API] Failed to update generation stats:', statsError);
     }
 
-    res.write(`data: ${JSON.stringify({ done: true, type })}\n\n`);
+    res.write(`data: ${JSON.stringify({ done: true, type: sourceType })}\n\n`);
     res.end();
 
-  } catch (error: any) {
-    console.error('API Error:', error);
-    let errMsg = "Erreur interne du serveur lors de la génération.";
-    if (error?.status === 429) {
-      errMsg = "Quota dépassé sur le service d'Intelligence Artificielle.";
-    } else if (error?.status === 400 || error?.message?.includes('API key')) {
+  } catch (error: unknown) {
+    console.error('[API] /generate-script error:', error);
+
+    const isRateLimitError = error instanceof Error && error.message.includes('429');
+    const isInvalidKeyError = error instanceof Error && (
+      error.message.includes('API key') ||
+      error.message.includes('400')
+    );
+
+    let errMsg = 'Erreur interne du serveur lors de la génération.';
+    if (isRateLimitError) {
+      errMsg = "Quota dépassé sur le service d'Intelligence Artificielle. Réessayez dans quelques instants.";
+    } else if (isInvalidKeyError) {
       errMsg = "Clé d'API invalide ou requête incorrecte.";
     }
+
     if (!res.headersSent) {
       res.status(500).json({ error: errMsg });
     } else {
@@ -208,33 +284,26 @@ Write all content in French. Make it sound natural and professional for a video 
   }
 });
 
-apiRouter.delete('/user/account', async (req, res): Promise<any> => {
+// ─────────────────────────────────────────────────────────────────────────────
+// DELETE /api/user/account
+// Supprime définitivement le compte de l'utilisateur authentifié.
+// ─────────────────────────────────────────────────────────────────────────────
+
+apiRouter.delete('/user/account', deleteAccountLimiter, async (req: Request, res: Response): Promise<void> => {
   try {
-      const authHeader = req.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-          return res.status(401).json({ error: 'Unauthorized: Missing or invalid token' });
-      }
+    const user = await verifyJwt(req, res);
+    if (!user) return;
 
-      const jwt = authHeader.split('Bearer ')[1];
-      const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(jwt);
-      
-      if (authError || !user) {
-         return res.status(401).json({ error: 'Unauthorized: Token verification failed' });
-      }
-      
-      const uid = user.id;
+    // ON DELETE CASCADE en PostgreSQL supprime automatiquement users et scripts liés
+    const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(user.id);
 
-      // Note: Because of PostgreSQL ON DELETE CASCADE on public.users and public.scripts,
-      // deleting the user from auth.users will automatically cascade and delete everything!
-      const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(uid);
-      
-      if (deleteError) {
-         throw deleteError;
-      }
+    if (deleteError) {
+      throw deleteError;
+    }
 
-      res.json({ success: true });
-  } catch (error) {
-      console.error('Account deletion error:', error);
-      res.status(500).json({ error: 'Failed to delete account on backend' });
+    res.json({ success: true });
+  } catch (error: unknown) {
+    console.error('[API] Account deletion error:', error);
+    res.status(500).json({ error: 'Échec de la suppression du compte côté serveur.' });
   }
 });

@@ -28,6 +28,7 @@
     "@angular/ssr": "21.0.0",
     "@capacitor/android": "^8.3.1",
     "@capacitor/core": "^8.3.1",
+    "@capacitor/haptics": "^8.0.2",
     "@capacitor/keyboard": "^8.0.3",
     "@capacitor/splash-screen": "^8.0.1",
     "@capacitor/status-bar": "^8.0.2",
@@ -36,9 +37,12 @@
     "@supabase/supabase-js": "^2.104.1",
     "cors": "^2.8.6",
     "express": "^5.1.0",
+    "express-rate-limit": "^8.4.1",
+    "helmet": "^8.1.0",
     "motion": "^12.23.24",
     "rxjs": "~7.8.0",
-    "tslib": "^2.3.0"
+    "tslib": "^2.3.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@angular/build": "21.0.0",

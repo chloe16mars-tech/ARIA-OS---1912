@@ -60,7 +60,7 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
             <mat-icon class="text-2xl">auto_awesome</mat-icon>
             <span class="text-[10px] mt-1 font-medium truncate w-full text-center px-1">{{ 'layout.generate' | translate }}</span>
           </a>
-          @if (!authService.isAnonymous()) {
+          @if (!isAnonymous()) {
             <a routerLink="/history" routerLinkActive="text-black dark:text-white bg-gray-100 dark:bg-[#2C2C2E]" class="flex flex-col items-center justify-center rounded-2xl text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-100 w-[64px] h-[64px] sm:w-[72px] sm:h-[72px]">
               <mat-icon class="text-2xl">text_snippet</mat-icon>
               <span class="text-[10px] mt-1 font-medium truncate w-full text-center px-1">{{ 'layout.scripts' | translate }}</span>
@@ -97,10 +97,12 @@ export class LayoutComponent implements OnInit, OnDestroy {
   private unsubNotifications?: () => void;
   private unsubProfile?: () => void;
   
+  isAnonymous = computed(() => this.authService.isAnonymous());
+  
   private statsService = inject(StatsService);
   private notificationService = inject(NotificationService);
   private userService = inject(UserService);
-  public authService = inject(AuthService);
+  private authService = inject(AuthService);
 
   formatCompactNumber(num: number): string {
     if (num >= 1000000) {

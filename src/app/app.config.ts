@@ -11,6 +11,6 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideZonelessChangeDetection(),
     provideBrowserGlobalErrorListeners(),
-    provideRouter(routes, withInMemoryScrolling({ scrollPositionRestoration: 'top' }), withPreloading(PreloadAllModules)),
+    provideRouter(routes, withInMemoryScrolling({ scrollPositionRestoration: 'top' })),
   ],
 };

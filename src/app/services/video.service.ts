@@ -24,9 +24,17 @@ export class VideoService {
   private storeName = 'videos';
   private db: IDBDatabase | null = null;
   private authService = inject(AuthService);
+  private urlCache = new Set<string>();
 
-  constructor() {
-    this.initDB();
+  private revokeAllUrls() {
+    this.urlCache.forEach(url => URL.revokeObjectURL(url));
+    this.urlCache.clear();
+  }
+
+  private createUrl(blob: Blob): string {
+    const url = URL.createObjectURL(blob);
+    this.urlCache.add(url);
+    return url;
   }
 
   private initDB(): Promise<void> {
@@ -123,6 +131,7 @@ export class VideoService {
 
   async getVideos(): Promise<SavedVideo[]> {
     if (!this.db) await this.initDB();
+    this.revokeAllUrls(); // Clean up old URLs before creating new ones for the list
 
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction([this.storeName], 'readonly');
@@ -146,13 +155,22 @@ export class VideoService {
         // Recreate object URLs since they don't persist across sessions
         videos.forEach(v => {
           if (v.blob) {
-            v.url = URL.createObjectURL(v.blob);
+            v.url = this.createUrl(v.blob);
           }
         });
         resolve(videos);
       };
       request.onerror = () => reject(request.error);
     });
+  }
+
+  /**
+   * Placeholder for future cloud sync with Supabase Storage
+   */
+  async syncToCloud(videoId: string): Promise<string | null> {
+     // TODO: Implement Supabase Storage upload
+     // const { data, error } = await supabase.storage.from('videos').upload(...)
+     return null;
   }
 
   async getVideo(id: string): Promise<SavedVideo | null> {
@@ -175,7 +193,7 @@ export class VideoService {
           }
           
           if (video.blob) {
-            video.url = URL.createObjectURL(video.blob);
+            video.url = this.createUrl(video.blob);
           }
           resolve(video);
         } else {

@@ -6,9 +6,10 @@ const config: CapacitorConfig = {
   webDir: 'dist/aria-os/browser',
   bundledWebRuntime: false,
   plugins: {
-    FirebaseAuthentication: {
-      skipNativeAuth: false,
-      providers: ['google.com'],
+    GoogleAuth: {
+      scopes: ['profile', 'email'],
+      serverClientId: '876435210987-example.apps.googleusercontent.com', // À REMPLACER PAR LE WEB CLIENT ID DE SUPABASE
+      forceCodeForRefreshToken: true,
     },
     SplashScreen: {
       launchShowDuration: 2500,
@@ -24,6 +25,8 @@ const config: CapacitorConfig = {
       resize: 'body',
       resizeOnFullScreen: true,
     },
+    Haptics: {},
   },
 };
+
 export default config;

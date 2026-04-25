@@ -27,23 +27,23 @@ export interface ScriptData {
 export class ScriptService {
   private authService = inject(AuthService);
 
-  private mapFromDb(row: any): ScriptData {
+  private mapFromDb(row: Record<string, unknown>): ScriptData {
     return {
-      id: row.id,
-      userId: row.user_id,
-      sourceUrl: row.source_url,
-      sourceText: row.source_text,
-      sourceType: row.source_type,
-      intention: row.intention,
-      tone: row.tone,
-      stance: row.stance,
-      duration: row.duration,
-      content: row.content,
-      createdAt: new Date(row.created_at),
-      isDeleted: row.is_deleted,
-      deletedAt: row.deleted_at ? new Date(row.deleted_at) : undefined,
-      title: row.title,
-      pinned: row.pinned
+      id: row['id'] as string,
+      userId: row['user_id'] as string,
+      sourceUrl: row['source_url'] as string | undefined,
+      sourceText: row['source_text'] as string | undefined,
+      sourceType: row['source_type'] as any,
+      intention: row['intention'] as string,
+      tone: row['tone'] as string,
+      stance: row['stance'] as string | undefined,
+      duration: row['duration'] as string,
+      content: row['content'] as string,
+      createdAt: new Date(row['created_at'] as string),
+      isDeleted: row['is_deleted'] as boolean,
+      deletedAt: row['deleted_at'] ? new Date(row['deleted_at'] as string) : undefined,
+      title: row['title'] as string | undefined,
+      pinned: row['pinned'] as boolean | undefined
     };
   }
 
@@ -76,11 +76,11 @@ export class ScriptService {
   }
 
   async updateScript(scriptId: string, partial: Partial<ScriptData>) {
-    const updates: any = {};
-    if (partial.title !== undefined) updates.title = partial.title;
-    if (partial.content !== undefined) updates.content = partial.content;
-    if (partial.pinned !== undefined) updates.pinned = partial.pinned;
-    if (partial.isDeleted !== undefined) updates.is_deleted = partial.isDeleted;
+    const updates: Record<string, unknown> = {};
+    if (partial.title !== undefined) updates['title'] = partial.title;
+    if (partial.content !== undefined) updates['content'] = partial.content;
+    if (partial.pinned !== undefined) updates['pinned'] = partial.pinned;
+    if (partial.isDeleted !== undefined) updates['is_deleted'] = partial.isDeleted;
 
     const { error } = await supabase
       .from('scripts')
@@ -129,6 +129,8 @@ export class ScriptService {
     const user = this.authService.currentUser();
     if (!user) return () => undefined;
 
+    let currentScripts: ScriptData[] = [];
+
     const fetchScripts = async () => {
       const { data, error } = await supabase
         .from('scripts')
@@ -140,15 +142,31 @@ export class ScriptService {
       if (error) {
         handleSupabaseError(error, OperationType.LIST, 'scripts');
       } else if (data) {
-        callback(data.map(this.mapFromDb));
+        currentScripts = data.map(d => this.mapFromDb(d));
+        callback(currentScripts);
       }
     };
 
     fetchScripts();
 
-    const channel = supabase.channel('public:scripts:active')
+    const channel = supabase.channel(`public:scripts:active:${user.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'scripts', filter: `user_id=eq.${user.id}` }, payload => {
-        fetchScripts();
+        if (payload.eventType === 'UPDATE') {
+          const updated = this.mapFromDb(payload.new);
+          if (updated.isDeleted) {
+            currentScripts = currentScripts.filter(s => s.id !== updated.id);
+          } else {
+            const index = currentScripts.findIndex(s => s.id === updated.id);
+            if (index !== -1) {
+              currentScripts[index] = updated;
+            } else {
+              currentScripts = [updated, ...currentScripts].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+            }
+          }
+          callback([...currentScripts]);
+        } else {
+          fetchScripts();
+        }
       })
       .subscribe();
 
@@ -158,6 +176,8 @@ export class ScriptService {
   getTrashedScriptsSnapshot(callback: (scripts: ScriptData[]) => void) {
     const user = this.authService.currentUser();
     if (!user) return () => undefined;
+
+    let currentScripts: ScriptData[] = [];
 
     const fetchScripts = async () => {
       const { data, error } = await supabase
@@ -170,15 +190,34 @@ export class ScriptService {
       if (error) {
         handleSupabaseError(error, OperationType.LIST, 'scripts/trash');
       } else if (data) {
-        callback(data.map(this.mapFromDb));
+        currentScripts = data.map(d => this.mapFromDb(d));
+        callback(currentScripts);
       }
     };
 
     fetchScripts();
 
-    const channel = supabase.channel('public:scripts:trash')
+    const channel = supabase.channel(`public:scripts:trash:${user.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'scripts', filter: `user_id=eq.${user.id}` }, payload => {
-        fetchScripts();
+        if (payload.eventType === 'UPDATE') {
+          const updated = this.mapFromDb(payload.new);
+          if (!updated.isDeleted) {
+            currentScripts = currentScripts.filter(s => s.id !== updated.id);
+          } else {
+            const index = currentScripts.findIndex(s => s.id === updated.id);
+            if (index !== -1) {
+              currentScripts[index] = updated;
+            } else {
+              currentScripts = [updated, ...currentScripts].sort((a, b) => (b.deletedAt?.getTime() || 0) - (a.deletedAt?.getTime() || 0));
+            }
+          }
+          callback([...currentScripts]);
+        } else if (payload.eventType === 'DELETE') {
+            currentScripts = currentScripts.filter(s => s.id !== payload.old['id']);
+            callback([...currentScripts]);
+        } else {
+          fetchScripts();
+        }
       })
       .subscribe();
 

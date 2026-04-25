@@ -27,17 +27,17 @@ export interface UserProfile {
 export class UserService {
   private authService = inject(AuthService);
 
-  private mapFromDb(row: any): UserProfile {
+  private mapFromDb(row: Record<string, unknown>): UserProfile {
     return {
-      email: row.email,
-      displayName: row.display_name,
-      photoURL: row.photo_url,
-      createdAt: new Date(row.created_at),
-      generationCount: row.generation_count,
-      anonymousGenerationCount: row.anonymous_generation_count,
-      lastGenerationDate: row.last_generation_date ? new Date(row.last_generation_date) : undefined,
-      scheduledDeletionDate: row.scheduled_deletion_date ? new Date(row.scheduled_deletion_date) : undefined,
-      preferences: row.preferences
+      email: row['email'] as string | undefined,
+      displayName: row['display_name'] as string | undefined,
+      photoURL: row['photo_url'] as string | undefined,
+      createdAt: new Date(row['created_at'] as string),
+      generationCount: row['generation_count'] as number | undefined,
+      anonymousGenerationCount: row['anonymous_generation_count'] as number | undefined,
+      lastGenerationDate: row['last_generation_date'] ? new Date(row['last_generation_date'] as string) : undefined,
+      scheduledDeletionDate: row['scheduled_deletion_date'] ? new Date(row['scheduled_deletion_date'] as string) : undefined,
+      preferences: row['preferences'] as UserPreferences | undefined
     };
   }
 
@@ -47,7 +47,7 @@ export class UserService {
 
     const fetchProfile = async () => {
       const { data, error } = await supabase
-        .from('users')
+        .from('profiles')
         .select('*')
         .eq('id', user.id)
         .single();
@@ -55,7 +55,7 @@ export class UserService {
       if (error) {
         // If row doesn't exist yet (before trigger), ignore or log
         if (error.code !== 'PGRST116') {
-          handleSupabaseError(error, OperationType.GET, `users/${user.id}`);
+          handleSupabaseError(error, OperationType.GET, `profiles/${user.id}`);
         }
         callback(null);
       } else if (data) {
@@ -65,8 +65,8 @@ export class UserService {
 
     fetchProfile();
 
-    const channel = supabase.channel('public:users:profile')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'users', filter: `id=eq.${user.id}` }, payload => {
+    const channel = supabase.channel('public:profiles:profile')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` }, payload => {
         fetchProfile();
       })
       .subscribe();
@@ -79,12 +79,12 @@ export class UserService {
     if (!user || user.is_anonymous) return;
     
     const { error } = await supabase
-      .from('users')
+      .from('profiles')
       .update({ preferences })
       .eq('id', user.id);
 
     if (error) {
-      handleSupabaseError(error, OperationType.UPDATE, 'users');
+      handleSupabaseError(error, OperationType.UPDATE, 'profiles');
     }
   }
 
@@ -96,12 +96,12 @@ export class UserService {
     deletionDate.setDate(deletionDate.getDate() + 3); // +3 days
     
     const { error } = await supabase
-      .from('users')
+      .from('profiles')
       .update({ scheduled_deletion_date: deletionDate.toISOString() })
       .eq('id', user.id);
 
     if (error) {
-      handleSupabaseError(error, OperationType.UPDATE, `users/${user.id}`);
+      handleSupabaseError(error, OperationType.UPDATE, `profiles/${user.id}`);
     }
   }
 
@@ -110,12 +110,12 @@ export class UserService {
     if (!user) return;
     
     const { error } = await supabase
-      .from('users')
+      .from('profiles')
       .update({ scheduled_deletion_date: null })
       .eq('id', user.id);
 
     if (error) {
-      handleSupabaseError(error, OperationType.UPDATE, `users/${user.id}`);
+      handleSupabaseError(error, OperationType.UPDATE, `profiles/${user.id}`);
     }
   }
 

@@ -13,25 +13,25 @@ export class ToastService {
   toasts = signal<Toast[]>([]);
   private idCounter = 0;
 
-  show(message: string, type: 'success' | 'error' | 'info' = 'info') {
+  show(message: string, type: 'success' | 'error' | 'info' = 'info', duration: number = 3000) {
     const id = this.idCounter++;
     this.toasts.update(t => [...t, { id, message, type }]);
     
     setTimeout(() => {
       this.remove(id);
-    }, 3000);
+    }, duration);
   }
 
   success(message: string) {
-    this.show(message, 'success');
+    this.show(message, 'success', 3000);
   }
 
   error(message: string) {
-    this.show(message, 'error');
+    this.show(message, 'error', 6000); // Les erreurs restent plus longtemps
   }
 
   info(message: string) {
-    this.show(message, 'info');
+    this.show(message, 'info', 4000);
   }
 
   remove(id: number) {

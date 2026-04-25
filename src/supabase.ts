@@ -1,11 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
+import { environment } from './environments/environment';
 
-// Configuration Supabase
-export const supabaseUrl = 'https://seqaczzjvrqveourhvxb.supabase.co';
-export const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNlcWFjenpqdnJxdmVvdXJodnhiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwMzQ0MDUsImV4cCI6MjA5MjYxMDQwNX0.lHuS_0QKpHnnIDX2AZJijdH5C0SnBR7Ii7B0CF4UqDg';
-
-// Client Frontend (utilise la clé anonyme publique)
-export const supabase = createClient(supabaseUrl, supabaseKey);
+// Client Frontend (utilise la clé anonyme publique — RLS enforced côté Supabase)
+// La clé anon est intentionnellement publique. Ne jamais utiliser la service_role ici.
+export const supabase = createClient(environment.supabaseUrl, environment.supabaseAnonKey);
 
 export enum OperationType {
   CREATE = 'create',
@@ -16,8 +14,14 @@ export enum OperationType {
   WRITE = 'write',
 }
 
-export function handleSupabaseError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo = {
+export interface SupabaseErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+}
+
+export function handleSupabaseError(error: unknown, operationType: OperationType, path: string | null): never {
+  const errInfo: SupabaseErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     operationType,
     path

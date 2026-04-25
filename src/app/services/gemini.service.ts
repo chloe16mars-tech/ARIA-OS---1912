@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { AuthService } from './auth.service';
+import { environment } from '../../environments/environment';
 
 @Injectable({
   providedIn: 'root'
@@ -27,7 +28,7 @@ export class GeminiService {
         const token = await this.authService.getIdToken();
         if (!token) throw new Error("Impossible d'obtenir le jeton d'authentification.");
 
-        const response = await fetch('/api/generate-script', {
+        const response = await fetch(`${environment.apiUrl}/api/generate-script`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -97,8 +98,12 @@ export class GeminiService {
           }
         }
         resolve({ script: fullText, type: finalType });
-      } catch (error: any) {
-        reject(error);
+      } catch (error: unknown) {
+        if (error instanceof Error) {
+          reject(error);
+        } else {
+          reject(new Error("Une erreur inconnue est survenue"));
+        }
       }
     });
   }

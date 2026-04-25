@@ -71,8 +71,8 @@ export class App implements OnInit {
 
   private checkAccountDeletion() {
     const unsubscribe = this.userService.getUserProfileSnapshot(async (profile) => {
-      if (profile && profile.scheduled_deletion_date) {
-        const deletionDate = new Date(profile.scheduled_deletion_date);
+      if (profile && profile.scheduledDeletionDate) {
+        const deletionDate = new Date(profile.scheduledDeletionDate);
         if (new Date() > deletionDate) {
           try {
             await this.userService.deleteUserAccount();

@@ -17,7 +17,32 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const browserDistFolder = join(__dirname, '../browser');
 
+import helmet from 'helmet';
+import cors from 'cors';
+
 const app = express();
+
+// Configuration Helmet pour sécuriser les en-têtes HTTP
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+      "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Nécessaire pour Angular en dev
+      "connect-src": ["'self'", "https://*.supabase.co", "https://*.googleapis.com"],
+      "img-src": ["'self'", "data:", "https://*.supabase.co", "https://images.unsplash.com"],
+    },
+  },
+}));
+
+// Configuration CORS restrictive
+// Configuration CORS pour autoriser le Web et le Mobile (Capacitor)
+app.use(cors({
+  origin: process.env['NODE_ENV'] === 'production' 
+    ? ['https://votre-domaine.com', 'http://localhost', 'capacitor://localhost'] 
+    : ['http://localhost:4200', 'http://localhost:3000', 'http://localhost', 'capacitor://localhost'],
+  methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
 
 app.use(express.json());
 

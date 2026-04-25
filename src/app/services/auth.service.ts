@@ -37,16 +37,22 @@ export class AuthService {
     });
   }
 
-  waitForAuthReady(): Promise<void> {
-    if (this.isAuthReady()) return Promise.resolve();
+  async waitForAuthReady(): Promise<void> {
+    if (this.isAuthReady()) return;
+    
     return new Promise((resolve) => {
-      const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-        this.currentSession.set(session);
-        this.currentUser.set(session?.user || null);
-        this.isAuthReady.set(true);
-        authListener.subscription.unsubscribe();
+      const checkInterval = setInterval(() => {
+        if (this.isAuthReady()) {
+          clearInterval(checkInterval);
+          resolve();
+        }
+      }, 50);
+
+      // Sécurité : Timeout après 10 secondes pour ne pas bloquer l'app éternellement
+      setTimeout(() => {
+        clearInterval(checkInterval);
         resolve();
-      });
+      }, 10000);
     });
   }
 
