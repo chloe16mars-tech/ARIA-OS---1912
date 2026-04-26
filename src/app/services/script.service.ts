@@ -33,7 +33,7 @@ export class ScriptService {
       userId: row['user_id'] as string,
       sourceUrl: row['source_url'] as string | undefined,
       sourceText: row['source_text'] as string | undefined,
-      sourceType: row['source_type'] as any,
+      sourceType: row['source_type'] as ScriptData['sourceType'],
       intention: row['intention'] as string,
       tone: row['tone'] as string,
       stance: row['stance'] as string | undefined,
@@ -72,7 +72,10 @@ export class ScriptService {
     if (error) {
       handleSupabaseError(error, OperationType.CREATE, 'scripts');
     }
-    return data.id;
+    if (!data) {
+      throw new Error('Insert script returned no data.');
+    }
+    return data.id as string;
   }
 
   async updateScript(scriptId: string, partial: Partial<ScriptData>) {

@@ -1,52 +1,36 @@
 import { Injectable } from '@angular/core';
-import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { Capacitor } from '@capacitor/core';
+import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
 
-@Injectable({
-  providedIn: 'root'
-})
+@Injectable({ providedIn: 'root' })
 export class HapticService {
-  private isNative = Capacitor.isNativePlatform();
+  private readonly isNative = Capacitor.isNativePlatform();
 
-  async lightImpact() {
-    if (this.isNative) {
-      await Haptics.impact({ style: ImpactStyle.Light });
-    }
+  async lightImpact(): Promise<void> {
+    if (this.isNative) await Haptics.impact({ style: ImpactStyle.Light });
   }
 
-  async mediumImpact() {
-    if (this.isNative) {
-      await Haptics.impact({ style: ImpactStyle.Medium });
-    }
+  async mediumImpact(): Promise<void> {
+    if (this.isNative) await Haptics.impact({ style: ImpactStyle.Medium });
   }
 
-  async heavyImpact() {
-    if (this.isNative) {
-      await Haptics.impact({ style: ImpactStyle.Heavy });
-    }
+  async heavyImpact(): Promise<void> {
+    if (this.isNative) await Haptics.impact({ style: ImpactStyle.Heavy });
   }
 
-  async vibrate() {
-    if (this.isNative) {
-      await Haptics.vibrate();
-    }
+  async vibrate(): Promise<void> {
+    if (this.isNative) await Haptics.vibrate();
   }
 
-  async success() {
-    if (this.isNative) {
-      await Haptics.notification({ type: 'SUCCESS' as any });
-    }
+  async success(): Promise<void> {
+    if (this.isNative) await Haptics.notification({ type: NotificationType.Success });
   }
 
-  async error() {
-    if (this.isNative) {
-      await Haptics.notification({ type: 'ERROR' as any });
-    }
+  async error(): Promise<void> {
+    if (this.isNative) await Haptics.notification({ type: NotificationType.Error });
   }
 
-  async warning() {
-    if (this.isNative) {
-      await Haptics.notification({ type: 'WARNING' as any });
-    }
+  async warning(): Promise<void> {
+    if (this.isNative) await Haptics.notification({ type: NotificationType.Warning });
   }
 }

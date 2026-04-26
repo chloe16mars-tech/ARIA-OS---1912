@@ -1,4 +1,4 @@
-import { Component, ElementRef, Input, ViewChild, signal, effect, OnDestroy, Output, EventEmitter, AfterViewInit } from '@angular/core';
+import { Component, ElementRef, Input, ViewChild, effect, OnDestroy, Output, EventEmitter, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 @Component({

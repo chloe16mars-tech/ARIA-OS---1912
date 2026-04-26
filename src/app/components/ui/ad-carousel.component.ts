@@ -1,7 +1,6 @@
-import { Component, signal, inject, OnInit, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
+import { Component, signal, OnInit, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslatePipe } from '../../pipes/translate.pipe';
-import { LanguageService } from '../../services/language.service';
 
 @Component({
   selector: 'app-ad-carousel',
@@ -71,7 +70,7 @@ export class AdCarouselComponent implements OnInit, OnDestroy {
   ];
 
   currentAdIndex = signal(0);
-  private adInterval: any;
+  private adInterval: ReturnType<typeof setInterval> | null = null;
 
   ngOnInit() {
     this.startAdRotation();

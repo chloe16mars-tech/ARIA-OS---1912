@@ -1,4 +1,4 @@
-import { Component, ElementRef, Input, ViewChild, signal, effect, OnDestroy } from '@angular/core';
+import { Component, ElementRef, Input, ViewChild, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { TranslatePipe } from '../../pipes/translate.pipe';

@@ -1,13 +1,24 @@
 import { Injectable, inject } from '@angular/core';
 import { AuthService } from './auth.service';
+import { LoggerService } from './logger.service';
 import { environment } from '../../environments/environment';
 
-@Injectable({
-  providedIn: 'root'
-})
+export type ScriptSourceType = 'video' | 'article' | 'social' | 'text';
+
+export interface GenerateResult {
+  script: string;
+  type: ScriptSourceType;
+}
+
+@Injectable({ providedIn: 'root' })
 export class GeminiService {
-  private authService = inject(AuthService);
-  
+  private auth = inject(AuthService);
+  private logger = inject(LoggerService);
+
+  /**
+   * Streams a generated script from the API. `onProgress` receives the
+   * full text accumulated so far on every chunk.
+   */
   async analyzeAndGenerateScript(
     sourceUrl: string,
     sourceText: string,
@@ -16,95 +27,76 @@ export class GeminiService {
     stance: string,
     duration: string,
     onProgress?: (text: string) => void
-  ): Promise<{ script: string, type: 'video' | 'article' | 'social' | 'text' }> {
-    
-    return new Promise(async (resolve, reject) => {
-      try {
-        const user = this.authService.currentUser();
-        if (!user) {
-          throw new Error("Vous devez être connecté pour générer un script.");
-        }
-        
-        const token = await this.authService.getIdToken();
-        if (!token) throw new Error("Impossible d'obtenir le jeton d'authentification.");
+  ): Promise<GenerateResult> {
+    const user = this.auth.currentUser();
+    if (!user) {
+      throw new Error('Vous devez être connecté pour générer un script.');
+    }
+    const token = await this.auth.getIdToken();
+    if (!token) throw new Error("Impossible d'obtenir le jeton d'authentification.");
 
-        const response = await fetch(`${environment.apiUrl}/api/generate-script`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-             sourceUrl,
-             sourceText,
-             intention,
-             tone,
-             stance,
-             duration
-          })
-        });
+    const response = await fetch(`${environment.apiUrl}/api/generate-script`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ sourceUrl, sourceText, intention, tone, stance, duration }),
+    });
 
-        if (!response.ok) {
-           let errorObj;
-           try {
-             errorObj = await response.json();
-           } catch (e) {
-             throw new Error("Erreur de connexion au serveur.");
-           }
-           throw new Error(errorObj.error || "Erreur HTTP " + response.status);
-        }
+    if (!response.ok) {
+      const errorObj = await response.json().catch(() => null);
+      throw new Error(
+        errorObj?.error ?? `Erreur HTTP ${response.status} lors de la génération.`
+      );
+    }
+    if (!response.body) throw new Error('Réponse vide du serveur.');
 
-        if (!response.body) {
-           throw new Error("Réponse vide du serveur.");
-        }
+    return this.consumeSseStream(response.body, onProgress);
+  }
 
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder('utf-8');
-        let fullText = '';
-        let finalType: 'video' | 'article' | 'social' | 'text' = 'text';
-        let buffer = '';
+  private async consumeSseStream(
+    body: ReadableStream<Uint8Array>,
+    onProgress?: (text: string) => void
+  ): Promise<GenerateResult> {
+    const reader = body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let fullText = '';
+    let finalType: ScriptSourceType = 'text';
+    let buffer = '';
 
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          
-          buffer += decoder.decode(value, { stream: true });
-          const parts = buffer.split('\n\n');
-          buffer = parts.pop() || ''; // Keep the last potentially incomplete chunk in the buffer
-          
-          for (const ev of parts) {
-            if (ev.startsWith('data: ')) {
-              try {
-                 const dataStr = ev.replace(/^data:\s*/, '');
-                 if (dataStr === '[DONE]') continue; // Standard ignore for end blocks
-                 
-                 const data = JSON.parse(dataStr);
-                 if (data.error) {
-                    throw new Error(data.error);
-                 }
-                 if (data.text) {
-                    fullText += data.text;
-                    if (onProgress) onProgress(fullText);
-                 }
-                 if (data.done) {
-                    finalType = data.type || 'text';
-                 }
-              } catch (e: unknown) {
-                 if (e instanceof Error && e.message !== "Unexpected end of JSON input") {
-                    throw e; // Rethrow actual backend errors, ignore silent incomplete chunks 
-                 }
-              }
-            }
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split('\n\n');
+      buffer = events.pop() ?? '';
+
+      for (const event of events) {
+        if (!event.startsWith('data: ')) continue;
+        const dataStr = event.replace(/^data:\s*/, '');
+        if (dataStr === '[DONE]') continue;
+        try {
+          const data = JSON.parse(dataStr);
+          if (data.error) throw new Error(data.error);
+          if (typeof data.text === 'string') {
+            fullText += data.text;
+            onProgress?.(fullText);
+          }
+          if (data.done && typeof data.type === 'string') {
+            finalType = data.type;
+          }
+        } catch (err) {
+          // Ignore partial JSON chunks; rethrow real backend errors.
+          if (err instanceof Error && !err.message.includes('JSON')) {
+            this.logger.error('GeminiService', 'SSE parse error:', err);
+            throw err;
           }
         }
-        resolve({ script: fullText, type: finalType });
-      } catch (error: unknown) {
-        if (error instanceof Error) {
-          reject(error);
-        } else {
-          reject(new Error("Une erreur inconnue est survenue"));
-        }
       }
-    });
+    }
+
+    return { script: fullText, type: finalType };
   }
 }
