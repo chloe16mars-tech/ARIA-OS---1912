@@ -126,17 +126,29 @@ export class LayoutComponent implements OnInit, OnDestroy {
   });
 
   ngOnInit() {
-    this.unsubscribeStats = this.statsService.getGlobalStatsSnapshot((total) => {
-      this.totalGenerations.set(total);
-    });
+    try {
+      this.unsubscribeStats = this.statsService.getGlobalStatsSnapshot((total) => {
+        this.totalGenerations.set(total || 0);
+      });
+    } catch (err) {
+      console.error('[Layout] Stats failed:', err);
+    }
     
-    this.unsubNotifications = this.notificationService.getNotificationsSnapshot((data) => {
-      this.notifications.set(data);
-    });
+    try {
+      this.unsubNotifications = this.notificationService.getNotificationsSnapshot((data) => {
+        this.notifications.set(data || []);
+      });
+    } catch (err) {
+      console.error('[Layout] Notifications failed:', err);
+    }
 
-    this.unsubProfile = this.userService.getUserProfileSnapshot((data) => {
-      this.userProfile.set(data);
-    });
+    try {
+      this.unsubProfile = this.userService.getUserProfileSnapshot((data) => {
+        this.userProfile.set(data);
+      });
+    } catch (err) {
+      console.error('[Layout] Profile failed:', err);
+    }
   }
 
   ngOnDestroy() {

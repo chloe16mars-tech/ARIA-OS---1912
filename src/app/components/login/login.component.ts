@@ -81,6 +81,16 @@ export class LoginComponent {
   private authService = inject(AuthService);
   private router = inject(Router);
 
+  constructor() {
+    // If the user is already logged in, send them home immediately
+    this.authService.waitForAuthReady().then(() => {
+      if (this.authService.currentUser()) {
+        console.log('[LoginComponent] User already logged in, redirecting to home...');
+        this.router.navigate(['/']);
+      }
+    });
+  }
+
   async login() {
     if (this.isLoadingGoogle()) return;
     

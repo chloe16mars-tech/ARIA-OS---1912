@@ -35,14 +35,16 @@ export class AuthService {
       };
 
       // Initial fetch.
+      console.log('[AuthService] Initializing session check...');
       supabase.auth
         .getSession()
         .then(({ data: { session } }) => {
+          console.log('[AuthService] Initial session status:', session ? 'CONNECTED' : 'NOT CONNECTED');
           this.applySession(session);
           markReady();
         })
         .catch((err) => {
-          this.logger.error('AuthService', 'getSession failed', err);
+          console.error('[AuthService] getSession failed', err);
           markReady();
         });
 
@@ -51,7 +53,13 @@ export class AuthService {
     });
 
     // Keep state in sync with all subsequent auth events.
-    supabase.auth.onAuthStateChange((_event, session) => {
+    supabase.auth.onAuthStateChange((event, session) => {
+      console.log(`[Auth] Event: ${event}`, session ? `User: ${session.user.email}` : 'No Session');
+      
+      if (event === 'SIGNED_OUT') {
+        console.warn('[Auth] Logout detected. If you didn\'t click logout, check your Supabase Project URL and Site URL settings.');
+      }
+
       this.applySession(session);
       this.isAuthReady.set(true);
     });
@@ -77,7 +85,12 @@ export class AuthService {
         });
         if (error) throw error;
       } else {
-        const { error } = await supabase.auth.signInWithOAuth({ provider: 'google' });
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: window.location.origin
+          }
+        });
         if (error) throw error;
       }
     } catch (err) {

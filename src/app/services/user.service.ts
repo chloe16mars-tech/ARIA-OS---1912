@@ -57,9 +57,8 @@ export class UserService {
         .single();
 
       if (error) {
-        // If row doesn't exist yet (before trigger), ignore or log
         if (error.code !== 'PGRST116') {
-          handleSupabaseError(error, OperationType.GET, `profiles/${user.id}`);
+          console.error('[UserService] Error fetching profile:', error);
         }
         callback(null);
       } else if (data) {
@@ -69,13 +68,20 @@ export class UserService {
 
     fetchProfile();
 
-    const channel = supabase.channel('public:profiles:profile')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` }, _payload => {
+    const channel = supabase.channel(`public:profiles:${user.id}`)
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'profiles', 
+        filter: `id=eq.${user.id}` 
+      }, () => {
         fetchProfile();
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }
 
   async saveUserPreferences(preferences: UserPreferences) {
