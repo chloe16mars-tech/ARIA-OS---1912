@@ -167,7 +167,7 @@ export class VideoService {
   /**
    * Placeholder for future cloud sync with Supabase Storage
    */
-  async syncToCloud(videoId: string): Promise<string | null> {
+  async syncToCloud(_videoId: string): Promise<string | null> {
      // TODO: Implement Supabase Storage upload
      // const { data, error } = await supabase.storage.from('videos').upload(...)
      return null;

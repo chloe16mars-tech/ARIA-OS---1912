@@ -1,5 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
-import { supabase } from '../../../supabase';
+import { Component, OnInit } from '@angular/core';
 import { TranslatePipe } from '../../pipes/translate.pipe';
 
 @Component({

@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, signal } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { TranslatePipe } from '../../pipes/translate.pipe';
@@ -118,10 +118,10 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
   `
 })
 export class ScriptConfigComponent {
-  @Input() intentions: any[] = [];
-  @Input() tones: any[] = [];
-  @Input() stances: any[] = [];
-  @Input() durations: any[] = [];
+  @Input() intentions: { key: string; val: string }[] = [];
+  @Input() tones: { key: string; val: string }[] = [];
+  @Input() stances: { key: string; val: string }[] = [];
+  @Input() durations: { key: string; val: string }[] = [];
   
   @Input() selectedIntention: string | null = null;
   @Input() selectedTone: string | null = null;

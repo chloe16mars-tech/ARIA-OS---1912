@@ -7,7 +7,6 @@ import { FormsModule } from '@angular/forms';
 import { VideoService, SavedVideo } from '../../services/video.service';
 import { ToastService } from '../../services/toast.service';
 import { HapticService } from '../../services/haptic.service';
-import { LanguageService } from '../../services/language.service';
 import { TranslatePipe } from '../../pipes/translate.pipe';
 
 import { VideoCardComponent } from './video-card.component';
@@ -280,7 +279,7 @@ export class VideosComponent implements OnInit {
     });
   }
 
-  shareVideo(video: SavedVideo) {
+  shareVideo(_video: SavedVideo) {
     this.hapticService.lightImpact();
     const text = encodeURIComponent(`Regarde ma vidéo enregistrée sur ARIA-OS !`);
     window.open(`https://wa.me/?text=${text}`, '_blank');

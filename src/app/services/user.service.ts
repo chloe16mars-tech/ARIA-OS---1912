@@ -70,7 +70,7 @@ export class UserService {
     fetchProfile();
 
     const channel = supabase.channel('public:profiles:profile')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` }, payload => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` }, _payload => {
         fetchProfile();
       })
       .subscribe();

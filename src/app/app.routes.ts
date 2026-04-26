@@ -33,5 +33,9 @@ export const routes: Routes = [
       { path: 'about', loadComponent: () => import('./components/about/about.component').then(m => m.AboutComponent) }
     ]
   },
-  { path: '**', redirectTo: '' }
+  {
+    path: '**',
+    loadComponent: () =>
+      import('./components/not-found/not-found.component').then((m) => m.NotFoundComponent),
+  },
 ];

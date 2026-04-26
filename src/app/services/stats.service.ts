@@ -31,7 +31,7 @@ export class StatsService {
     fetchStats();
 
     const channel = supabase.channel('public:global_stats')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'global_stats', filter: 'id=eq.1' }, payload => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'global_stats', filter: 'id=eq.1' }, _payload => {
         fetchStats();
       })
       .subscribe();

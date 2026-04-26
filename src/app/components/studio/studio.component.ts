@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ViewChild, ElementRef, signal, computed, effect, inject, NgZone, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef, signal, inject, NgZone, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule, Location } from '@angular/common';
 import { Router } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
@@ -162,11 +162,37 @@ export class StudioComponent implements OnInit, OnDestroy {
 
   // Teleprompter State
   scriptContent = signal('');
+  fullScriptContent = signal('');
   scriptTitle = signal('');
   fontSize = signal(28);
   scrollSpeed = signal(1.0);
   maskOpacity = signal(0.5);
   textShadowEnabled = signal(true);
+
+  // Recording state
+  isRecording = signal(false);
+  isSaving = signal(false);
+  hasCameraPermission = signal(false);
+  recordingMode = signal<'video-front' | 'video-back' | 'audio'>('video-front');
+  recordedVideoUrl = signal<string | null>(null);
+  recordingTime = signal(0);
+
+  // Imperative refs (no need for reactivity)
+  stream: MediaStream | null = null;
+  mediaStream: MediaStream | null = null;
+  mediaRecorder: MediaRecorder | null = null;
+  recordedChunks: Blob[] = [];
+  timerInterval: ReturnType<typeof setInterval> | null = null;
+  unsubscribeScripts: (() => void) | null = null;
+
+  /**
+   * Extracts the voice-over text from the wrapping <script_pro> tags emitted
+   * by Gemini. Falls back to the full content if the markers are missing.
+   */
+  private extractVoiceoverText(content: string): string {
+    const match = content.match(/<script_pro>([\s\S]*?)<\/script_pro>/i);
+    return (match?.[1] ?? content).trim();
+  }
 
   onRecordingAutoStop() {
     if (this.isRecording()) {
@@ -177,8 +203,8 @@ export class StudioComponent implements OnInit, OnDestroy {
 
   async ngOnInit() {
     try {
-      const cameraStatus = await navigator.permissions.query({ name: 'camera' as any });
-      const micStatus = await navigator.permissions.query({ name: 'microphone' as any });
+      const cameraStatus = await navigator.permissions.query({ name: 'camera' as PermissionName });
+      const micStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
       if (cameraStatus.state === 'granted' && micStatus.state === 'granted') {
         this.hasCameraPermission.set(true);
         this.initCamera();
@@ -245,7 +271,7 @@ export class StudioComponent implements OnInit, OnDestroy {
 
       if (mode === 'video-front') {
         constraints.video = { facingMode: 'user', width: { ideal: 1920 }, height: { ideal: 1080 } };
-      } else if (mode === 'video-rear') {
+      } else if (mode === 'video-back') {
         constraints.video = { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } };
       } else {
         constraints.video = false;
@@ -262,7 +288,7 @@ export class StudioComponent implements OnInit, OnDestroy {
   cycleRecordingMode() {
     if (this.isRecording()) return;
     this.hapticService.lightImpact();
-    const modes: ('video-front' | 'video-rear' | 'audio')[] = ['video-front', 'video-rear', 'audio'];
+    const modes: ('video-front' | 'video-back' | 'audio')[] = ['video-front', 'video-back', 'audio'];
     const nextIndex = (modes.indexOf(this.recordingMode()) + 1) % modes.length;
     this.recordingMode.set(modes[nextIndex]);
     this.initCamera();

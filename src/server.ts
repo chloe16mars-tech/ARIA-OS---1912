@@ -6,93 +6,120 @@ import {
   writeResponseToNodeResponse,
 } from '@angular/ssr/node';
 import express from 'express';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { dirname } from 'node:path';
 import 'dotenv/config';
+import helmet from 'helmet';
+import cors from 'cors';
+
 import { apiRouter } from './server/api.router.js';
 
-// Compatible tsx (CJS) et ESM : import.meta.dirname peut être undefined sous tsx
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const browserDistFolder = join(__dirname, '../browser');
 
-import helmet from 'helmet';
-import cors from 'cors';
+const isProd = process.env['NODE_ENV'] === 'production';
 
 const app = express();
 
-// Configuration Helmet pour sécuriser les en-têtes HTTP
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-      "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Nécessaire pour Angular en dev
-      "connect-src": ["'self'", "https://*.supabase.co", "https://*.googleapis.com"],
-      "img-src": ["'self'", "data:", "https://*.supabase.co", "https://images.unsplash.com"],
+// ── Trust proxy ──────────────────────────────────────────────────────────
+// Required for `req.ip` to reflect the real client behind a reverse proxy
+// (Vercel, Render, Fly, Nginx). Drives express-rate-limit and logging.
+const trustProxy = Number.parseInt(process.env['TRUST_PROXY'] ?? '1', 10);
+app.set('trust proxy', Number.isFinite(trustProxy) ? trustProxy : 1);
+
+// ── Security headers ─────────────────────────────────────────────────────
+// CSP is only relaxed in development (Angular dev-server needs eval). In
+// production we ship a hashed bundle where 'self' is enough.
+const helmetCsp = isProd
+  ? {
+      directives: {
+        ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+        'script-src': ["'self'"],
+        'connect-src': [
+          "'self'",
+          'https://*.supabase.co',
+          'wss://*.supabase.co',
+          'https://*.googleapis.com',
+        ],
+        'img-src': ["'self'", 'data:', 'blob:', 'https://*.supabase.co'],
+        'media-src': ["'self'", 'blob:'],
+      },
+    }
+  : {
+      directives: {
+        ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+        'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+        'connect-src': ["'self'", 'ws:', 'http:', 'https:'],
+        'img-src': ["'self'", 'data:', 'blob:', 'https:'],
+      },
+    };
+
+app.use(helmet({ contentSecurityPolicy: helmetCsp }));
+
+// ── CORS ─────────────────────────────────────────────────────────────────
+// Origins come from env so we never ship placeholders to production.
+const allowedOrigins = (process.env['ALLOWED_ORIGINS'] ?? '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+if (isProd && allowedOrigins.length === 0) {
+  console.warn(
+    '[server] ALLOWED_ORIGINS is empty in production. CORS will reject every cross-origin request.'
+  );
+}
+
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      // Same-origin requests (no Origin header) and explicit allow-list pass.
+      if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+      return cb(new Error(`CORS: origin ${origin} is not allowed`));
     },
-  },
-}));
+    methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: false,
+  })
+);
 
-// Configuration CORS restrictive
-// Configuration CORS pour autoriser le Web et le Mobile (Capacitor)
-app.use(cors({
-  origin: process.env['NODE_ENV'] === 'production' 
-    ? ['https://votre-domaine.com', 'http://localhost', 'capacitor://localhost'] 
-    : ['http://localhost:4200', 'http://localhost:3000', 'http://localhost', 'capacitor://localhost'],
-  methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-}));
+app.use(express.json({ limit: '64kb' }));
 
-app.use(express.json());
-
-// API routes — disponibles en dev et en production
+// ── API ──────────────────────────────────────────────────────────────────
 app.use('/api', apiRouter);
 
-/**
- * Serve static files from /browser (production only)
- */
+// ── Static assets (production only — dev-server handles them in dev) ─────
 app.use(
   express.static(browserDistFolder, {
     maxAge: '1y',
     index: false,
     redirect: false,
-  }),
+  })
 );
 
-/**
- * Handle all other requests by rendering the Angular application.
- * AngularNodeAppEngine est instanciée en lazy pour éviter un crash
- * en mode dev (tsx) où le manifest Angular n'est pas encore compilé.
- */
+// ── Angular SSR fallback ─────────────────────────────────────────────────
+// Lazy-instantiated so `tsx` dev mode does not crash before the Angular
+// manifest exists.
 app.use((req, res, next) => {
   let angularApp: AngularNodeAppEngine;
   try {
     angularApp = new AngularNodeAppEngine();
   } catch {
-    // En mode dev (tsx sans build Angular), on laisse passer — ng serve gère le frontend
     return next();
   }
   angularApp
     .handle(req)
     .then((response) =>
-      response ? writeResponseToNodeResponse(response, res) : next(),
+      response ? writeResponseToNodeResponse(response, res) : next()
     )
     .catch(next);
 });
 
-/**
- * Start the server if this module is the main entry point, or it is ran via PM2.
- * The server listens on the port defined by the `PORT` environment variable, or defaults to 4000.
- */
 if (isMainModule(import.meta.url)) {
-  const port = process.env['PORT'] || 4000;
+  const port = Number.parseInt(process.env['PORT'] ?? '4000', 10);
   app.listen(port, () => {
-    console.log(`Node Express server listening on http://localhost:${port}`);
+    console.log(`[server] listening on http://localhost:${port} (NODE_ENV=${process.env['NODE_ENV'] ?? 'development'})`);
   });
 }
 
-/**
- * Request handler used by the Angular CLI (for dev-server and during build).
- */
 export const reqHandler = createNodeRequestHandler(app);
