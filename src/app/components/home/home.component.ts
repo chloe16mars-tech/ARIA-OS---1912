@@ -1,4 +1,4 @@
-import { Component, signal, computed, OnInit, OnDestroy, inject, effect, ChangeDetectionStrategy } from '@angular/core';
+import { Component, signal, computed, OnInit, OnDestroy, inject, effect, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -37,63 +37,69 @@ import { GenerationViewComponent } from './generation-view.component';
     GenerationViewComponent
   ],
   template: `
-    <div class="p-4 max-w-3xl mx-auto space-y-12 pb-32">
-      
-      <!-- Ad Carousel -->
-      <app-ad-carousel />
+    @if (isReady()) {
+      <div class="p-4 max-w-3xl mx-auto space-y-12 pb-32">
+        
+        <!-- Ad Carousel -->
+        <app-ad-carousel />
 
-      <!-- Step Indicator -->
-      <app-step-indicator [currentStep]="currentStep()" />
+        <!-- Step Indicator -->
+        <app-step-indicator [currentStep]="currentStep()" />
 
-      <!-- Step 1: Input -->
-      @if (currentStep() === 1) {
-        <app-source-input 
-          [url]="sourceUrl()"
-          [text]="sourceText()"
-          [error]="urlError()"
-          [isAnonymous]="isAnonymousUser()"
-          (urlChange)="sourceUrl.set($event)"
-          (textChange)="sourceText.set($event)"
-          (continue)="nextStep()"
-        />
-      }
+        <!-- Step 1: Input -->
+        @if (currentStep() === 1) {
+          <app-source-input 
+            [url]="sourceUrl()"
+            [text]="sourceText()"
+            [error]="urlError()"
+            [isAnonymous]="isAnonymousUser()"
+            (urlChange)="sourceUrl.set($event)"
+            (textChange)="sourceText.set($event)"
+            (continue)="nextStep()"
+          />
+        }
 
-      <!-- Step 2: Config -->
-      @if (currentStep() === 2) {
-        <app-script-config 
-          [intentions]="intentions"
-          [tones]="tones"
-          [stances]="stances"
-          [durations]="durations"
-          [selectedIntention]="selectedIntentionKey()"
-          [selectedTone]="selectedToneKey()"
-          [selectedStance]="selectedStanceKey()"
-          [selectedDuration]="selectedDurationKey()"
-          [isAnonymous]="isAnonymousUser()"
-          (intentionChange)="selectedIntentionKey.set($event)"
-          (toneChange)="selectedToneKey.set($event)"
-          (stanceChange)="selectedStanceKey.set($event)"
-          (durationChange)="selectedDurationKey.set($event)"
-          (generate)="generateScript()"
-        />
-      }
+        <!-- Step 2: Config -->
+        @if (currentStep() === 2) {
+          <app-script-config 
+            [intentions]="intentions"
+            [tones]="tones"
+            [stances]="stances"
+            [durations]="durations"
+            [selectedIntention]="selectedIntentionKey()"
+            [selectedTone]="selectedToneKey()"
+            [selectedStance]="selectedStanceKey()"
+            [selectedDuration]="selectedDurationKey()"
+            [isAnonymous]="isAnonymousUser()"
+            (intentionChange)="selectedIntentionKey.set($event)"
+            (toneChange)="selectedToneKey.set($event)"
+            (stanceChange)="selectedStanceKey.set($event)"
+            (durationChange)="selectedDurationKey.set($event)"
+            (generate)="generateScript()"
+          />
+        }
 
-      <!-- Step 3: Generation & Result -->
-      @if (currentStep() === 3) {
-        <app-generation-view 
-          [isGenerating]="isGenerating()"
-          [scriptContent]="scriptResult()"
-          (goToStudio)="openInStudio()"
-          (reset)="resetAll()"
-        />
-      }
+        <!-- Step 3: Generation & Result -->
+        @if (currentStep() === 3) {
+          <app-generation-view 
+            [isGenerating]="isGenerating()"
+            [scriptContent]="scriptResult()"
+            (goToStudio)="openInStudio()"
+            (reset)="resetAll()"
+          />
+        }
 
-      <!-- Bottom Marquee (Only on step 1) -->
-      @if (currentStep() === 1) {
-        <app-source-marquee />
-      }
-
-    </div>
+        <!-- Bottom Marquee (Only on step 1) -->
+        @if (currentStep() === 1) {
+          <app-source-marquee />
+        }
+      </div>
+    } @else {
+      <!-- Simple loading state while signals stabilize -->
+      <div class="min-h-[60vh] flex items-center justify-center">
+        <div class="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    }
   `,
   styles: [`
     :host { display: block; min-height: 100vh; background: transparent; }
@@ -108,6 +114,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   private hapticService = inject(HapticService);
   private languageService = inject(LanguageService);
   private router = inject(Router);
+  private cdr = inject(ChangeDetectorRef);
 
   // Core State
   currentStep = signal(1);
@@ -115,6 +122,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   sourceText = signal('');
   isGenerating = signal(false);
   scriptResult = signal('');
+  isReady = signal(false);
   
   // Config Options
   intentions = [
@@ -192,7 +200,9 @@ export class HomeComponent implements OnInit, OnDestroy {
     }
   }
 
-  ngOnInit() {
+  async ngOnInit() {
+    await this.authService.waitForAuthReady();
+    
     if (!this.isAnonymousUser()) {
       this.unsubscribeProfile = this.userService.getUserProfileSnapshot(profile => {
         if (profile?.preferences && this.currentStep() < 3) {
@@ -204,6 +214,10 @@ export class HomeComponent implements OnInit, OnDestroy {
         }
       });
     }
+
+    // Force the view to render now that we are sure auth state is stable
+    this.isReady.set(true);
+    this.cdr.detectChanges();
   }
 
   ngOnDestroy() {
