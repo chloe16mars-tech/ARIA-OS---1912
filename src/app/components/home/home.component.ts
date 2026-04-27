@@ -50,10 +50,12 @@ import { GenerationViewComponent } from './generation-view.component';
         <app-source-input 
           [url]="sourceUrl()"
           [text]="sourceText()"
+          [activeType]="activeSourceType()"
           [error]="urlError()"
           [isAnonymous]="isAnonymousUser()"
           (urlChange)="sourceUrl.set($event)"
           (textChange)="sourceText.set($event)"
+          (activeTypeChange)="activeSourceType.set($event)"
           (continue)="nextStep()"
         />
       }
@@ -112,6 +114,7 @@ export class HomeComponent implements OnInit, OnDestroy {
 
   // Core State
   currentStep = signal(1);
+  activeSourceType = signal<'url' | 'text'>('url');
   sourceUrl = signal('');
   sourceText = signal('');
   isGenerating = signal(false);
@@ -156,6 +159,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   isAnonymousUser = computed(() => this.authService.isAnonymous());
 
   urlError = computed(() => {
+    if (this.activeSourceType() !== 'url') return '';
     const url = this.sourceUrl().trim();
     if (!url) return '';
     try {
@@ -212,8 +216,14 @@ export class HomeComponent implements OnInit, OnDestroy {
   }
 
   private loadScriptToEdit(script: ScriptData) {
-    if (script.sourceUrl) this.sourceUrl.set(script.sourceUrl);
-    if (script.sourceText) this.sourceText.set(script.sourceText);
+    if (script.sourceUrl) {
+      this.sourceUrl.set(script.sourceUrl);
+      this.activeSourceType.set('url');
+    }
+    if (script.sourceText) {
+      this.sourceText.set(script.sourceText);
+      if (!script.sourceUrl) this.activeSourceType.set('text');
+    }
     this.selectedIntentionKey.set(this.intentions.find(i => i.val === script.intention)?.key || null);
     this.selectedToneKey.set(this.tones.find(t => t.val === script.tone)?.key || null);
     this.selectedStanceKey.set(this.stances.find(s => s.val === script.stance)?.key || null);
@@ -240,9 +250,10 @@ export class HomeComponent implements OnInit, OnDestroy {
       const stance = this.stances.find(s => s.key === this.selectedStanceKey())?.val || 'Objectif';
       const duration = this.durations.find(d => d.key === this.selectedDurationKey())?.val || '1 min';
 
+      const isUrl = this.activeSourceType() === 'url';
       await this.geminiService.analyzeAndGenerateScript(
-        this.sourceUrl(),
-        this.sourceText(),
+        isUrl ? this.sourceUrl() : undefined,
+        !isUrl ? this.sourceText() : undefined,
         intent,
         tone,
         stance,

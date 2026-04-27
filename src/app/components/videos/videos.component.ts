@@ -5,6 +5,7 @@ import { RouterModule, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 
 import { VideoService, SavedVideo } from '../../services/video.service';
+import { AuthService } from '../../services/auth.service';
 import { ToastService } from '../../services/toast.service';
 import { HapticService } from '../../services/haptic.service';
 import { TranslatePipe } from '../../pipes/translate.pipe';
@@ -142,6 +143,7 @@ import { VideoPlayerModalComponent } from './video-player-modal.component';
 })
 export class VideosComponent implements OnInit {
   private videoService = inject(VideoService);
+  private authService = inject(AuthService);
   private toastService = inject(ToastService);
   private hapticService = inject(HapticService);
   private router = inject(Router);
@@ -184,6 +186,8 @@ export class VideosComponent implements OnInit {
   });
 
   async ngOnInit() {
+    // Wait for auth session to be fully loaded
+    await this.authService.waitForAuthReady();
     await this.loadVideos();
   }
 

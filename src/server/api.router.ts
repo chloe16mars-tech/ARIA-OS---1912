@@ -13,7 +13,7 @@ import { isSafePublicUrl } from './ssrf-guard.js';
 const supabaseUrl = process.env['SUPABASE_URL'];
 const supabaseServiceKey = process.env['SUPABASE_SERVICE_ROLE_KEY'];
 const geminiApiKey = process.env['GEMINI_API_KEY'];
-const geminiModel = process.env['GEMINI_MODEL'] ?? 'gemini-3.1-pro-preview';
+const geminiModel = process.env['GEMINI_MODEL'] ?? 'gemini-2.5-pro';
 
 if (!supabaseUrl || !supabaseServiceKey) {
   console.error(
@@ -86,15 +86,17 @@ const generateScriptSchema = z
   .object({
     sourceUrl: z
       .string()
-      .url('URL invalide')
       .max(2048, 'URL trop longue')
-      .refine(isSafePublicUrl, { message: 'URL non autorisée.' })
-      .optional(),
+      .optional()
+      .refine(val => !val || val === '' || isSafePublicUrl(val), { message: 'URL non autorisée.' })
+      .refine(val => !val || val === '' || /^https?:\/\//.test(val), { message: 'URL invalide' }),
     sourceText: z
       .string()
-      .min(10, 'Le texte source doit contenir au moins 10 caractères')
       .max(8000, 'Le texte source ne peut pas dépasser 8000 caractères')
-      .optional(),
+      .optional()
+      .refine(val => !val || val === '' || val.length >= 10, {
+        message: 'Le texte source doit contenir au moins 10 caractères',
+      }),
     intention: z.enum(ALLOWED_INTENTIONS),
     tone: z.enum(ALLOWED_TONES),
     stance: z.enum(ALLOWED_STANCES),
@@ -198,7 +200,9 @@ apiRouter.post(
       const stream = await ai.models.generateContentStream({
         model: geminiModel,
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        // config: tools.length > 0 ? { tools } : undefined,
+        // Enable Google Search grounding for URL-based sources so the model
+        // can retrieve current page content and produce accurate scripts.
+        config: tools.length > 0 ? { tools } : undefined,
       });
 
       for await (const chunk of stream) {
@@ -262,13 +266,19 @@ apiRouter.get('/health', (_req, res) => {
 // ─────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────
+/**
+ * Fire both stat increments in parallel — halves the DB round-trips.
+ * Global counter always increments; the per-user counter depends on
+ * whether the caller is anonymous or authenticated.
+ */
 async function incrementStats(db: SupabaseClient, user: AuthedUser): Promise<void> {
-  await db.rpc('increment_global_generations');
+  const tasks: Promise<any>[] = [Promise.resolve(db.rpc('increment_global_generations'))];
   if (user.isAnonymous) {
-    await db.rpc('increment_anonymous_generation_count', { p_user_id: user.id });
+    tasks.push(Promise.resolve(db.rpc('increment_anonymous_generation_count', { p_user_id: user.id })));
   } else {
-    await db.rpc('increment_user_generation_count', { p_user_id: user.id });
+    tasks.push(Promise.resolve(db.rpc('increment_user_generation_count', { p_user_id: user.id })));
   }
+  await Promise.all(tasks);
 }
 
 function mapGeminiError(error: unknown): string {
@@ -276,7 +286,14 @@ function mapGeminiError(error: unknown): string {
     return 'Erreur inconnue lors de la génération.';
   }
   console.error('[Gemini Detail]', error.message);
-  return `Erreur IA : ${error.message}`;
+  // Surface quota/safety errors clearly; hide internal details otherwise.
+  if (error.message.includes('429') || error.message.toLowerCase().includes('quota')) {
+    return 'Quota API Gemini atteint. Veuillez réessayer dans quelques instants.';
+  }
+  if (error.message.includes('SAFETY') || error.message.toLowerCase().includes('safety')) {
+    return 'La génération a été bloquée par les filtres de sécurité. Reformulez votre source.';
+  }
+  return 'Erreur lors de la génération IA. Veuillez réessayer.';
 }
 
 export type { SourceType };

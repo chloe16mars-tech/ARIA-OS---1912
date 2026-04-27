@@ -20,8 +20,8 @@ export class GeminiService {
    * full text accumulated so far on every chunk.
    */
   async analyzeAndGenerateScript(
-    sourceUrl: string,
-    sourceText: string,
+    sourceUrl: string | undefined,
+    sourceText: string | undefined,
     intention: string,
     tone: string,
     stance: string,

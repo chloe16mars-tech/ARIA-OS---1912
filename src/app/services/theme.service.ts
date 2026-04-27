@@ -22,9 +22,12 @@ export class ThemeService {
         this.setDarkMode(true);
       } else if (savedTheme === 'light') {
         this.setDarkMode(false);
-      } else {
+      } else if (typeof window.matchMedia === 'function') {
         const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         this.setDarkMode(prefersDark);
+      } else {
+        // Fallback for environments without matchMedia (e.g. JSDOM without mocks)
+        this.setDarkMode(false);
       }
     }
   }

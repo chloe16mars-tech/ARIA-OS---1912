@@ -25,7 +25,7 @@ import { AriaNeonContainerComponent } from '../ui/aria-neon-container.component'
         <!-- Tab Switcher -->
         <div class="flex p-1.5 bg-gray-50 dark:bg-black/40 rounded-2xl border border-gray-100 dark:border-white/5 shadow-inner">
           @if (!isAnonymous) {
-            <button (click)="type.set('url')" 
+            <button (click)="setType('url')" 
                     [class.bg-white]="type() === 'url'" 
                     [class.dark:bg-white/10]="type() === 'url'"
                     [class.text-violet-600]="type() === 'url'"
@@ -35,7 +35,7 @@ import { AriaNeonContainerComponent } from '../ui/aria-neon-container.component'
               {{ 'home.source.url' | translate }}
             </button>
           }
-          <button (click)="type.set('text')" 
+          <button (click)="setType('text')" 
                   [class.bg-white]="type() === 'text'"
                   [class.dark:bg-white/10]="type() === 'text'"
                   [class.text-violet-600]="type() === 'text'"
@@ -100,12 +100,21 @@ export class SourceInputComponent {
   @Input() text = '';
   @Input() error = '';
   @Input() isAnonymous = false;
+  @Input() set activeType(val: 'url' | 'text') {
+    this.type.set(val);
+  }
 
   @Output() urlChange = new EventEmitter<string>();
   @Output() textChange = new EventEmitter<string>();
+  @Output() activeTypeChange = new EventEmitter<'url' | 'text'>();
   @Output() continue = new EventEmitter<void>();
 
-  type = signal<'url' | 'text'>('text');
+  type = signal<'url' | 'text'>('url');
+
+  setType(val: 'url' | 'text') {
+    this.type.set(val);
+    this.activeTypeChange.emit(val);
+  }
 
   canContinue(): boolean {
     if (this.type() === 'url') return this.url.length > 5;

@@ -1,0 +1,3162 @@
+1- Fix Gemini model name
+
+bash
+
+# PATCH 1: Fix Gemini model fallback (critical bug)
+sed -i "s/process.env\['GEMINI_MODEL'\] ?? 'gemini-3.1-pro-preview'/process.env['GEMINI_MODEL'] ?? 'gemini-2.5-pro'/" /tmp/aria_patched/src/server/api.router.ts
+grep "geminiModel" /tmp/aria_patched/src/server/api.router.ts
+Sortie
+
+const geminiModel = process.env['GEMINI_MODEL'] ?? 'gemini-2.5-pro';
+      console.log(`[api] Generating with model: ${geminiModel}`);
+        model: geminiModel,
+
+2- Rewrite api.router.ts with all fixes: correct model, Google Search enabled, parallel RPCs, better error mapping
+
+bash
+
+cat > /tmp/aria_patched/src/server/api.router.ts << 'ENDOFFILE'
+import { Router, type Request, type Response } from 'express';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { GoogleGenAI } from '@google/genai';
+import rateLimit from 'express-rate-limit';
+import { z } from 'zod';
+
+import { buildPrompt, type SourceType } from './prompt-builder.js';
+import { isSafePublicUrl } from './ssrf-guard.js';
+
+// ─────────────────────────────────────────────────────────────────────────
+// Supabase admin client (service role, server-only)
+// ─────────────────────────────────────────────────────────────────────────
+const supabaseUrl = process.env['SUPABASE_URL'];
+const supabaseServiceKey = process.env['SUPABASE_SERVICE_ROLE_KEY'];
+const geminiApiKey = process.env['GEMINI_API_KEY'];
+const geminiModel = process.env['GEMINI_MODEL'] ?? 'gemini-2.5-pro';
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.error(
+    '[api] FATAL: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is missing — protected endpoints will return 500.'
+  );
+}
+if (!geminiApiKey) {
+  console.error('[api] FATAL: GEMINI_API_KEY is missing — script generation is disabled.');
+}
+
+const supabaseAdmin: SupabaseClient = createClient(
+  supabaseUrl ?? '',
+  supabaseServiceKey ?? '',
+  { auth: { autoRefreshToken: false, persistSession: false } }
+);
+
+// ─────────────────────────────────────────────────────────────────────────
+// Rate limiting
+// ─────────────────────────────────────────────────────────────────────────
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Trop de requêtes. Veuillez patienter quelques minutes.' },
+});
+
+const generateScriptLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Limite de génération atteinte. Réessayez dans une heure.' },
+});
+
+const deleteAccountLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Trop de tentatives de suppression de compte.' },
+});
+
+export const apiRouter = Router();
+apiRouter.use(globalLimiter);
+
+// ─────────────────────────────────────────────────────────────────────────
+// Validation schemas
+// ─────────────────────────────────────────────────────────────────────────
+const ALLOWED_INTENTIONS = [
+  'Résumer',
+  'Analyser',
+  'Critiquer',
+  'Expliquer',
+  'Reformuler',
+  'Débattre',
+] as const;
+const ALLOWED_TONES = [
+  'Factuel (Neutre)',
+  'Punchy (Dynamique)',
+  'Satyrique',
+  'Inspirant',
+  'Analytique',
+  'Dramatique',
+] as const;
+const ALLOWED_STANCES = ['Objectif', 'Favorable (Élogieux)', 'Défavorable (À charge)'] as const;
+const ALLOWED_DURATIONS = ['30 sec', '1 min', '2 min', '3 min', '5 min'] as const;
+
+const generateScriptSchema = z
+  .object({
+    sourceUrl: z
+      .string()
+      .url('URL invalide')
+      .max(2048, 'URL trop longue')
+      .refine(isSafePublicUrl, { message: 'URL non autorisée.' })
+      .optional(),
+    sourceText: z
+      .string()
+      .min(10, 'Le texte source doit contenir au moins 10 caractères')
+      .max(8000, 'Le texte source ne peut pas dépasser 8000 caractères')
+      .optional(),
+    intention: z.enum(ALLOWED_INTENTIONS),
+    tone: z.enum(ALLOWED_TONES),
+    stance: z.enum(ALLOWED_STANCES),
+    duration: z.enum(ALLOWED_DURATIONS),
+  })
+  .refine((d) => d.sourceUrl || d.sourceText, {
+    message: 'Une source est requise : URL ou texte.',
+  });
+
+// ─────────────────────────────────────────────────────────────────────────
+// Auth helper
+// ─────────────────────────────────────────────────────────────────────────
+interface AuthedUser {
+  id: string;
+  isAnonymous: boolean;
+}
+
+async function verifyJwt(req: Request, res: Response): Promise<AuthedUser | null> {
+  const header = req.headers.authorization;
+  if (!header?.startsWith('Bearer ')) {
+    res.status(401).json({ error: 'Unauthorized: Token manquant ou invalide.' });
+    return null;
+  }
+  const jwt = header.slice('Bearer '.length);
+  const { data, error } = await supabaseAdmin.auth.getUser(jwt);
+  if (error || !data.user) {
+    res.status(401).json({ error: 'Unauthorized: Vérification du token échouée.' });
+    return null;
+  }
+  return { id: data.user.id, isAnonymous: data.user.is_anonymous ?? false };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// POST /api/generate-script
+// Streams a Gemini-generated voice-over script via Server-Sent Events.
+// Google Search grounding is enabled for URL sources so the model can
+// verify and enrich the content with fresh web data.
+// ─────────────────────────────────────────────────────────────────────────
+apiRouter.post(
+  '/generate-script',
+  generateScriptLimiter,
+  async (req: Request, res: Response): Promise<void> => {
+    console.log('[api] POST /generate-script - Request received');
+    try {
+      const user = await verifyJwt(req, res);
+      if (!user) return;
+
+      const parsed = generateScriptSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({
+          error: parsed.error.issues[0]?.message ?? 'Données invalides.',
+        });
+        return;
+      }
+      const { sourceUrl, sourceText, intention, tone, stance, duration } = parsed.data;
+
+      // Anonymous quota check (atomic via Postgres RPC).
+      if (user.isAnonymous) {
+        const { data: hasQuota, error: quotaError } = await supabaseAdmin.rpc(
+          'check_anonymous_quota',
+          { p_user_id: user.id }
+        );
+        if (quotaError) {
+          console.error('[api] check_anonymous_quota failed:', quotaError);
+          res.status(500).json({ error: 'Erreur lors de la vérification du quota.' });
+          return;
+        }
+        if (!hasQuota) {
+          res.status(429).json({
+            error:
+              'Quota dépassé. Les comptes anonymes sont limités à 2 générations par 24 h. Créez un compte pour continuer.',
+          });
+          return;
+        }
+      }
+
+      if (!geminiApiKey) {
+        res.status(500).json({ error: 'Configuration serveur incomplète.' });
+        return;
+      }
+
+      const { prompt, sourceType, tools } = buildPrompt({
+        sourceUrl,
+        sourceText,
+        intention,
+        tone,
+        stance,
+        duration,
+      });
+
+      // SSE init — disable Nginx buffering so chunks reach the client live.
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('X-Accel-Buffering', 'no');
+      res.flushHeaders?.();
+
+      console.log(`[api] Generating with model: ${geminiModel}, grounding: ${tools.length > 0}`);
+      const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+
+      const stream = await ai.models.generateContentStream({
+        model: geminiModel,
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        // Enable Google Search grounding for URL-based sources so the model
+        // can retrieve current page content and produce accurate scripts.
+        config: tools.length > 0 ? { tools } : undefined,
+      });
+
+      for await (const chunk of stream) {
+        if (chunk.text) {
+          res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
+        }
+      }
+
+      // Best-effort stats — never fail the user if metrics fail.
+      void incrementStats(supabaseAdmin, user).catch((err) =>
+        console.error('[api] stats update failed:', err)
+      );
+
+      res.write(`data: ${JSON.stringify({ done: true, type: sourceType })}\n\n`);
+      res.end();
+    } catch (error: unknown) {
+      console.error('[api] /generate-script error:', error);
+      const errMsg = mapGeminiError(error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: errMsg });
+      } else {
+        res.write(`data: ${JSON.stringify({ error: errMsg })}\n\n`);
+        res.end();
+      }
+    }
+  }
+);
+
+// ─────────────────────────────────────────────────────────────────────────
+// DELETE /api/user/account
+// Removes the authenticated user. Cascade deletes are handled in Postgres.
+// ─────────────────────────────────────────────────────────────────────────
+apiRouter.delete(
+  '/user/account',
+  deleteAccountLimiter,
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const user = await verifyJwt(req, res);
+      if (!user) return;
+      const { error } = await supabaseAdmin.auth.admin.deleteUser(user.id);
+      if (error) throw error;
+      res.json({ success: true });
+    } catch (error: unknown) {
+      console.error('[api] account deletion failed:', error);
+      res.status(500).json({ error: 'Échec de la suppression du compte côté serveur.' });
+    }
+  }
+);
+
+// ─────────────────────────────────────────────────────────────────────────
+// GET /api/health — used by uptime monitors and Capacitor pre-flight
+// ─────────────────────────────────────────────────────────────────────────
+apiRouter.get('/health', (_req, res) => {
+  res.json({
+    status: 'ok',
+    env: process.env['NODE_ENV'] ?? 'development',
+    time: new Date().toISOString(),
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Fire both stat increments in parallel — halves the DB round-trips.
+ * Global counter always increments; the per-user counter depends on
+ * whether the caller is anonymous or authenticated.
+ */
+async function incrementStats(db: SupabaseClient, user: AuthedUser): Promise<void> {
+  const tasks: Promise<unknown>[] = [db.rpc('increment_global_generations')];
+  if (user.isAnonymous) {
+    tasks.push(db.rpc('increment_anonymous_generation_count', { p_user_id: user.id }));
+  } else {
+    tasks.push(db.rpc('increment_user_generation_count', { p_user_id: user.id }));
+  }
+  await Promise.all(tasks);
+}
+
+function mapGeminiError(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return 'Erreur inconnue lors de la génération.';
+  }
+  console.error('[Gemini Detail]', error.message);
+  // Surface quota/safety errors clearly; hide internal details otherwise.
+  if (error.message.includes('429') || error.message.toLowerCase().includes('quota')) {
+    return 'Quota API Gemini atteint. Veuillez réessayer dans quelques instants.';
+  }
+  if (error.message.includes('SAFETY') || error.message.toLowerCase().includes('safety')) {
+    return 'La génération a été bloquée par les filtres de sécurité. Reformulez votre source.';
+  }
+  return 'Erreur lors de la génération IA. Veuillez réessayer.';
+}
+
+export type { SourceType };
+ENDOFFILE
+echo "api.router.ts patched"
+Sortie
+
+api.router.ts patched
+
+3- Confirm which components are missing OnPush / ChangeDetectionStrategy
+
+bash
+
+# Now the big one: the rendering bug
+# Root cause: LayoutComponent uses ChangeDetectionStrategy.OnPush + provideZonelessChangeDetection()
+# but the signal updates come from Supabase callbacks (outside Angular's reactive graph at subscription time)
+# The signals THEMSELVES are fine — but LayoutComponent has no ChangeDetectionStrategy declared in the snippet
+# Let me verify:
+head -5 /tmp/aria_patched/src/app/components/layout/layout.component.ts
+grep "changeDetection\|ChangeDetectionStrategy" /tmp/aria_patched/src/app/components/layout/layout.component.ts
+grep "changeDetection\|ChangeDetectionStrategy" /tmp/aria_patched/src/app/components/notifications/notifications.component.ts
+grep "changeDetection\|ChangeDetectionStrategy" /tmp/aria_patched/src/app/components/settings/settings.component.ts
+Sortie
+
+import { Component, OnInit, OnDestroy, signal, inject, computed, ChangeDetectionStrategy } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
+import { MatIconModule } from '@angular/material/icon';
+import { StatsService } from '../../services/stats.service';
+import { Component, OnInit, OnDestroy, signal, inject, computed, ChangeDetectionStrategy } from '@angular/core';
+  changeDetection: ChangeDetectionStrategy.OnPush,
+
+4- Check component decorators precisely
+
+Sortie
+
+1:import { Component, OnInit, OnDestroy, signal, inject, computed, ChangeDetectionStrategy } from '@angular/core';
+12:@Component({
+15:  changeDetection: ChangeDetectionStrategy.OnPush,
+10:@Component({
+12:@Component({
+
+5- Confirm root cause analysis
+
+bash
+
+# Notifications and Settings DON'T have OnPush + don't import ChangeDetectionStrategy
+# That's inconsistent but not the root bug.
+# 
+# The REAL root cause of missing elements on page load:
+# provideZonelessChangeDetection() means Angular ONLY re-renders when signals change.
+# The auth service uses a Supabase callback (onAuthStateChange) which sets signals.
+# BUT: the LayoutComponent and child components that depend on auth (isAnonymous, etc.)
+# are initialized BEFORE the Supabase auth callback fires.
+# The signal is updated but in zoneless mode, the component that depends on it
+# needs to be in the same reactive graph. If any component reads a signal via
+# a plain getter or in ngOnInit (not in the template directly), it won't re-render.
+#
+# Specific issue: LayoutComponent.ngOnInit calls services that use callbacks,
+# not signals. The callbacks call signal.set() which SHOULD trigger CD in zoneless...
+# BUT: StatsService.getGlobalStatsSnapshot uses authService.currentUser() ONCE at call time.
+# If called before auth is ready, it returns early: "if (!user) return () => undefined"
+# Same for NotificationService and UserService.
+# 
+# The fix: LayoutComponent must wait for auth to be ready before subscribing.
+# Same for all pages.
+echo "Analysis complete — implementing fixes"
+Sortie
+
+Analysis complete — implementing fixes
+
+6- Fix LayoutComponent: await auth before subscribing to fix missing elements on load
+
+bash
+
+cat > /tmp/aria_patched/src/app/components/layout/layout.component.ts << 'ENDOFFILE'
+import {
+  Component,
+  OnInit,
+  OnDestroy,
+  signal,
+  inject,
+  computed,
+  ChangeDetectionStrategy,
+} from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
+import { MatIconModule } from '@angular/material/icon';
+import { StatsService } from '../../services/stats.service';
+import { NotificationService, AppNotification } from '../../services/notification.service';
+import { UserService, UserProfile } from '../../services/user.service';
+import { AuthService } from '../../services/auth.service';
+import { ToastComponent } from '../ui/toast/toast.component';
+import { TranslatePipe } from '../../pipes/translate.pipe';
+
+@Component({
+  selector: 'app-layout',
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [
+    CommonModule,
+    RouterOutlet,
+    RouterLink,
+    RouterLinkActive,
+    MatIconModule,
+    ToastComponent,
+    TranslatePipe,
+  ],
+  template: `
+    <div class="min-h-screen flex flex-col bg-[#F9F9FB] dark:bg-[#0A0A0C] text-gray-900 dark:text-gray-100 relative">
+      <app-toast />
+
+      <!-- Background Pattern -->
+      <div class="fixed inset-0 pointer-events-none z-[-1] opacity-[0.03] bg-cakenews-pattern"></div>
+
+      <!-- Global Fixed Header -->
+      <div
+        class="fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-[#0A0A0C]/80 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-800/50"
+        style="padding-top: var(--sat);"
+      >
+        <div class="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <h1 class="text-2xl font-black tracking-tight drop-shadow-sm flex items-center gap-1">
+              <span class="text-red-500">A</span><span class="text-orange-500">R</span><span
+                class="text-yellow-500">I</span><span class="text-green-500">A</span><span
+                class="text-gray-900 dark:text-white">OS</span>
+            </h1>
+          </div>
+          <!-- Premium High-Tech AI Generations Badge -->
+          <div class="relative group" [title]="'badge.scripts' | translate">
+            <div
+              class="absolute -inset-0.5 bg-gradient-to-r from-red-500 via-orange-500 to-yellow-500 rounded-2xl blur-[2px] opacity-20 group-hover:opacity-40 transition-opacity duration-500"
+            ></div>
+            <div
+              class="relative flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-white dark:bg-[#111] border border-gray-100 dark:border-white/5 shadow-sm"
+            >
+              <mat-icon class="text-orange-500 text-[18px] w-[18px] h-[18px] aria-breathe-anim"
+                >bolt</mat-icon
+              >
+              <div class="flex flex-col">
+                <span
+                  class="text-[8px] font-black uppercase tracking-[0.2em] text-gray-400 dark:text-gray-600 leading-none mb-0.5"
+                  >Global</span
+                >
+                <span class="font-mono font-black text-gray-900 dark:text-white text-xs leading-none">{{
+                  formatCompactNumber(totalGenerations())
+                }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Content -->
+      <main class="flex-1 pb-32 relative" style="padding-top: calc(80px + var(--sat));">
+        <router-outlet></router-outlet>
+      </main>
+
+      <!-- Copyright -->
+      <div class="fixed bottom-3 left-0 right-0 text-center z-30 pointer-events-none">
+        <p class="text-[10px] text-gray-400 dark:text-gray-600 font-medium">
+          &copy; 2026 Mmedia Universe
+        </p>
+      </div>
+
+      <!-- Bottom Navigation (Floating Pill Style) -->
+      <div class="fixed bottom-10 left-0 right-0 flex justify-center z-40 pointer-events-none px-4">
+        <nav
+          class="bg-white/90 dark:bg-[#1C1C1E]/90 backdrop-blur-xl border border-gray-200/50 dark:border-gray-800/50 shadow-lg shadow-black/5 dark:shadow-black/20 rounded-[2rem] flex justify-around items-center px-2 py-2 gap-1 sm:gap-2 pointer-events-auto"
+        >
+          <a
+            routerLink="/"
+            routerLinkActive="text-black dark:text-white bg-gray-100 dark:bg-[#2C2C2E]"
+            [routerLinkActiveOptions]="{ exact: true }"
+            class="flex flex-col items-center justify-center rounded-2xl text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-100 w-[64px] h-[64px] sm:w-[72px] sm:h-[72px]"
+          >
+            <mat-icon class="text-2xl">auto_awesome</mat-icon>
+            <span class="text-[10px] mt-1 font-medium truncate w-full text-center px-1">{{
+              'layout.generate' | translate
+            }}</span>
+          </a>
+          @if (!isAnonymous()) {
+            <a
+              routerLink="/history"
+              routerLinkActive="text-black dark:text-white bg-gray-100 dark:bg-[#2C2C2E]"
+              class="flex flex-col items-center justify-center rounded-2xl text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-100 w-[64px] h-[64px] sm:w-[72px] sm:h-[72px]"
+            >
+              <mat-icon class="text-2xl">text_snippet</mat-icon>
+              <span class="text-[10px] mt-1 font-medium truncate w-full text-center px-1">{{
+                'layout.scripts' | translate
+              }}</span>
+            </a>
+            <a
+              routerLink="/videos"
+              routerLinkActive="text-black dark:text-white bg-gray-100 dark:bg-[#2C2C2E]"
+              class="flex flex-col items-center justify-center rounded-2xl text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-100 w-[64px] h-[64px] sm:w-[72px] sm:h-[72px]"
+            >
+              <mat-icon class="text-2xl">video_library</mat-icon>
+              <span class="text-[10px] mt-1 font-medium truncate w-full text-center px-1">{{
+                'layout.videos' | translate
+              }}</span>
+            </a>
+          }
+          <a
+            routerLink="/notifications"
+            routerLinkActive="text-black dark:text-white bg-gray-100 dark:bg-[#2C2C2E]"
+            class="flex flex-col items-center justify-center rounded-2xl text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-100 w-[64px] h-[64px] sm:w-[72px] sm:h-[72px] relative"
+          >
+            <div class="relative flex flex-col items-center justify-center">
+              <mat-icon class="text-2xl">notifications</mat-icon>
+              @if (unreadCount() > 0) {
+                <span
+                  class="absolute -top-1 -right-2 bg-red-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center border-2 border-white dark:border-[#1C1C1E]"
+                  >{{ unreadCount() > 9 ? '9+' : unreadCount() }}</span
+                >
+              }
+            </div>
+            <span class="text-[10px] mt-1 font-medium truncate w-full text-center px-1">{{
+              'layout.inbox' | translate
+            }}</span>
+          </a>
+          <a
+            routerLink="/settings"
+            routerLinkActive="text-black dark:text-white bg-gray-100 dark:bg-[#2C2C2E]"
+            class="flex flex-col items-center justify-center rounded-2xl text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-100 w-[64px] h-[64px] sm:w-[72px] sm:h-[72px]"
+          >
+            <mat-icon class="text-2xl">person</mat-icon>
+            <span class="text-[10px] mt-1 font-medium truncate w-full text-center px-1">{{
+              'layout.me' | translate
+            }}</span>
+          </a>
+        </nav>
+      </div>
+    </div>
+  `,
+})
+export class LayoutComponent implements OnInit, OnDestroy {
+  totalGenerations = signal(0);
+  notifications = signal<AppNotification[]>([]);
+  userProfile = signal<UserProfile | null>(null);
+
+  private unsubscribeStats?: () => void;
+  private unsubNotifications?: () => void;
+  private unsubProfile?: () => void;
+
+  isAnonymous = computed(() => this.authService.isAnonymous());
+
+  private statsService = inject(StatsService);
+  private notificationService = inject(NotificationService);
+  private userService = inject(UserService);
+  private authService = inject(AuthService);
+
+  formatCompactNumber(num: number): string {
+    if (num >= 1_000_000) return (num / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+    if (num >= 1_000) return (num / 1_000).toFixed(1).replace(/\.0$/, '') + 'k';
+    return num.toString();
+  }
+
+  unreadCount = computed(() => {
+    const notifs = this.notifications();
+    const profile = this.userProfile();
+    if (!profile) return 0;
+    const deleted = profile.deletedNotifications ?? [];
+    const read = profile.readNotifications ?? [];
+    return notifs.filter((n) => !deleted.includes(n.id!) && !read.includes(n.id!)).length;
+  });
+
+  async ngOnInit() {
+    // ── Wait for auth before subscribing to user-gated services ──────────
+    // Without this, all three snapshot functions return early (no user yet)
+    // and the header badge / nav items never populate on first load.
+    await this.authService.waitForAuthReady();
+
+    try {
+      this.unsubscribeStats = this.statsService.getGlobalStatsSnapshot((total) => {
+        this.totalGenerations.set(total ?? 0);
+      });
+    } catch (err) {
+      console.error('[Layout] Stats failed:', err);
+    }
+
+    try {
+      this.unsubNotifications = this.notificationService.getNotificationsSnapshot((data) => {
+        this.notifications.set(data ?? []);
+      });
+    } catch (err) {
+      console.error('[Layout] Notifications failed:', err);
+    }
+
+    try {
+      this.unsubProfile = this.userService.getUserProfileSnapshot((data) => {
+        this.userProfile.set(data);
+      });
+    } catch (err) {
+      console.error('[Layout] Profile failed:', err);
+    }
+  }
+
+  ngOnDestroy() {
+    this.unsubscribeStats?.();
+    this.unsubNotifications?.();
+    this.unsubProfile?.();
+  }
+}
+ENDOFFILE
+echo "layout.component.ts patched"
+Sortie
+
+layout.component.ts patched
+
+7- Fix NotificationsComponent: await auth, OnPush, proper loading skeleton
+
+bash
+
+cat > /tmp/aria_patched/src/app/components/notifications/notifications.component.ts << 'ENDOFFILE'
+import {
+  Component,
+  OnInit,
+  OnDestroy,
+  signal,
+  inject,
+  computed,
+  ChangeDetectionStrategy,
+} from '@angular/core';
+import { NotificationService, AppNotification } from '../../services/notification.service';
+import { UserService, UserProfile } from '../../services/user.service';
+import { LanguageService } from '../../services/language.service';
+import { AuthService } from '../../services/auth.service';
+import { TranslatePipe } from '../../pipes/translate.pipe';
+import { MatIconModule } from '@angular/material/icon';
+import { DatePipe } from '@angular/common';
+import { Router } from '@angular/router';
+
+@Component({
+  selector: 'app-notifications',
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [MatIconModule, DatePipe, TranslatePipe],
+  template: `
+    <div class="p-4 max-w-3xl mx-auto space-y-6 pb-24 animate-in fade-in duration-500">
+      <div class="space-y-1 px-2 mt-4">
+        <h2 class="text-2xl font-semibold tracking-tight">{{ 'notif.title' | translate }}</h2>
+        <p class="text-base text-gray-500 dark:text-gray-400">{{ 'notif.desc' | translate }}</p>
+      </div>
+
+      @if (loading()) {
+        <!-- Skeleton -->
+        <div class="space-y-4">
+          @for (i of [1, 2, 3]; track i) {
+            <div class="h-28 rounded-3xl bg-gray-100 dark:bg-white/5 animate-pulse"></div>
+          }
+        </div>
+      } @else if (visibleNotifications().length === 0) {
+        <div class="flex flex-col items-center justify-center py-20 text-center px-4">
+          <div
+            class="w-20 h-20 bg-gray-100 dark:bg-[#1C1C1E] rounded-full flex items-center justify-center mb-6"
+          >
+            <mat-icon class="text-gray-400 text-4xl w-10 h-10">notifications_none</mat-icon>
+          </div>
+          <h3 class="text-xl font-semibold mb-2">{{ 'notif.empty' | translate }}</h3>
+          <p class="text-gray-500 dark:text-gray-400 max-w-xs mx-auto">
+            {{ 'notif.emptyDesc' | translate }}
+          </p>
+        </div>
+      } @else {
+        <div class="space-y-4">
+          @for (notif of visibleNotifications(); track notif.id) {
+            <div
+              class="bg-white dark:bg-[#1C1C1E] rounded-3xl p-5 sm:p-6 border border-gray-200 dark:border-gray-800 shadow-sm relative overflow-hidden transition-all"
+              [class.opacity-70]="isRead(notif.id!)"
+            >
+              <!-- Unread Indicator -->
+              @if (!isRead(notif.id!)) {
+                <div class="absolute top-0 left-0 w-1 h-full bg-violet-500"></div>
+              }
+
+              <div class="flex gap-4">
+                <div
+                  class="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
+                  [class.bg-blue-50]="notif.type === 'info'"
+                  [class.dark:bg-blue-900/20]="notif.type === 'info'"
+                  [class.text-blue-600]="notif.type === 'info'"
+                  [class.dark:text-blue-400]="notif.type === 'info'"
+                  [class.bg-violet-50]="notif.type === 'update'"
+                  [class.dark:bg-violet-900/20]="notif.type === 'update'"
+                  [class.text-violet-600]="notif.type === 'update'"
+                  [class.dark:text-violet-400]="notif.type === 'update'"
+                  [class.bg-red-50]="notif.type === 'alert'"
+                  [class.dark:bg-red-900/20]="notif.type === 'alert'"
+                  [class.text-red-600]="notif.type === 'alert'"
+                  [class.dark:text-red-400]="notif.type === 'alert'"
+                >
+                  <mat-icon>{{ getIcon(notif.type) }}</mat-icon>
+                </div>
+
+                <div class="flex-1 min-w-0">
+                  <div class="flex justify-between items-start gap-2 mb-1">
+                    <h3
+                      class="font-bold text-base truncate"
+                      [class.text-gray-900]="!isRead(notif.id!)"
+                      [class.dark:text-white]="!isRead(notif.id!)"
+                    >
+                      {{ notif.title }}
+                    </h3>
+                    <span class="text-xs text-gray-400 whitespace-nowrap shrink-0">{{
+                      notif.created_at | date: 'dd MMM yyyy'
+                    }}</span>
+                  </div>
+                  <p class="text-sm text-gray-600 dark:text-gray-400 leading-relaxed mb-4">
+                    {{ notif.message }}
+                  </p>
+
+                  <div class="flex gap-2">
+                    @if (!isRead(notif.id!)) {
+                      <button
+                        (click)="markAsRead(notif.id!)"
+                        class="text-xs font-medium px-3 py-1.5 bg-gray-100 dark:bg-[#2C2C2E] hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                      >
+                        {{ 'notif.actions.markAsRead' | translate }}
+                      </button>
+                    }
+                    <button
+                      (click)="deleteNotification(notif.id!)"
+                      class="text-xs font-medium px-3 py-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                    >
+                      {{ 'notif.actions.delete' | translate }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  `,
+})
+export class NotificationsComponent implements OnInit, OnDestroy {
+  private notificationService = inject(NotificationService);
+  private userService = inject(UserService);
+  private languageService = inject(LanguageService);
+  private authService = inject(AuthService);
+  private router = inject(Router);
+
+  notifications = signal<AppNotification[]>([]);
+  userProfile = signal<UserProfile | null>(null);
+  loading = signal(true);
+
+  private unsubNotifications?: () => void;
+  private unsubProfile?: () => void;
+
+  visibleNotifications = computed(() => {
+    const deleted = this.userProfile()?.deletedNotifications ?? [];
+    return this.notifications().filter((n) => !deleted.includes(n.id!));
+  });
+
+  async ngOnInit() {
+    // Wait for auth — avoids the empty-state flash when service returns early
+    await this.authService.waitForAuthReady();
+
+    let notificationsLoaded = false;
+    let profileLoaded = false;
+    const checkDone = () => {
+      if (notificationsLoaded && profileLoaded) this.loading.set(false);
+    };
+
+    this.unsubNotifications = this.notificationService.getNotificationsSnapshot((data) => {
+      this.notifications.set(data);
+      notificationsLoaded = true;
+      checkDone();
+    });
+
+    this.unsubProfile = this.userService.getUserProfileSnapshot((data) => {
+      this.userProfile.set(data);
+      profileLoaded = true;
+      checkDone();
+    });
+  }
+
+  ngOnDestroy() {
+    this.unsubNotifications?.();
+    this.unsubProfile?.();
+  }
+
+  isRead(id: string): boolean {
+    return this.userProfile()?.readNotifications?.includes(id) ?? false;
+  }
+
+  getIcon(type: string): string {
+    if (type === 'update') return 'new_releases';
+    if (type === 'alert') return 'warning';
+    return 'info';
+  }
+
+  async markAsRead(id: string) {
+    await this.notificationService.markNotificationAsRead(id);
+  }
+
+  async deleteNotification(id: string) {
+    if (confirm(this.languageService.translate('notif.actions.deleteConfirm'))) {
+      await this.notificationService.deleteNotification(id);
+    }
+  }
+}
+ENDOFFILE
+echo "notifications.component.ts patched"
+Sortie
+
+notifications.component.ts patched
+
+8- Read history component logic tail
+
+bash
+
+cat /tmp/aria_project/ARIA-OS---1912-main/src/app/components/history/history.component.ts | tail -100
+Sortie
+
+    });
+    this.unsubscribeTrash = this.scriptService.getTrashedScriptsSnapshot((data) => {
+      this.trashedScripts.set(data);
+    });
+  }
+
+  ngOnDestroy() {
+    this.unsubscribeActive?.();
+    this.unsubscribeTrash?.();
+  }
+
+  setTab(tab: 'active' | 'trash') {
+    this.hapticService.lightImpact();
+    this.currentTab.set(tab);
+  }
+
+  async togglePin(script: ScriptData) {
+    if (!script.id) return;
+    this.hapticService.mediumImpact();
+    try {
+      await this.scriptService.updateScript(script.id, { pinned: !script.pinned });
+      this.toastService.success(script.pinned ? 'Script désépinglé' : 'Script épinglé');
+    } catch (e) {
+      this.hapticService.error();
+    }
+  }
+
+  openScript(script: ScriptData) {
+    this.hapticService.lightImpact();
+    this.selectedScript.set(script);
+  }
+
+  closeScript() {
+    this.selectedScript.set(null);
+  }
+
+  copyScript(script: ScriptData) {
+    navigator.clipboard.writeText(script.content).then(() => {
+      this.hapticService.success();
+      this.toastService.success('Copié !');
+    });
+  }
+
+  confirmDelete(script: ScriptData) {
+    this.hapticService.mediumImpact();
+    this.scriptToDelete.set(script);
+  }
+
+  async executeDelete() {
+    const script = this.scriptToDelete();
+    if (!script?.id) return;
+    try {
+      await this.scriptService.moveToTrash(script.id);
+      this.scriptToDelete.set(null);
+      this.hapticService.success();
+    } catch (e) {
+      this.hapticService.error();
+    }
+  }
+
+  async restoreScript(script: ScriptData) {
+    if (!script.id) return;
+    this.hapticService.mediumImpact();
+    try {
+      await this.scriptService.restoreScript(script.id);
+      this.toastService.success('Script restauré');
+      this.hapticService.success();
+    } catch (e) {
+      this.hapticService.error();
+    }
+  }
+
+  confirmHardDelete(script: ScriptData) {
+    this.hapticService.mediumImpact();
+    this.scriptToHardDelete.set(script);
+  }
+
+  async executeHardDelete() {
+    const script = this.scriptToHardDelete();
+    if (!script?.id) return;
+    try {
+      await this.scriptService.deleteScript(script.id);
+      this.scriptToHardDelete.set(null);
+      this.hapticService.success();
+    } catch (e) {
+      this.hapticService.error();
+    }
+  }
+
+  editScript(script: ScriptData) {
+    this.hapticService.mediumImpact();
+    this.router.navigate(['/'], { state: { scriptToEdit: script } });
+  }
+
+  goToStudio(script: ScriptData) {
+    this.hapticService.mediumImpact();
+    const title = (script.title || `${script.intention} - ${script.tone}`);
+    this.router.navigate(['/studio'], { state: { scriptContent: script.content, scriptTitle: title } });
+  }
+}
+
+9- Find exact ngOnInit location in history component
+
+bash
+
+# Fix history component ngOnInit - add await authService.waitForAuthReady()
+# and add loading skeleton  
+# Read the full ngOnInit section
+grep -n "ngOnInit\|unsubscribeActive\|unsubscribeTrash\|loading\|filteredAndSorted" /tmp/aria_project/ARIA-OS---1912-main/src/app/components/history/history.component.ts
+Sortie
+
+89:      @if (loading()) {
+95:      } @else if (filteredAndSortedScripts().length === 0) {
+109:          @for (script of filteredAndSortedScripts(); track script.id) {
+186:  loading = signal(true);
+196:  private unsubscribeActive?: () => void;
+197:  private unsubscribeTrash?: () => void;
+199:  filteredAndSortedScripts = computed(() => {
+235:  ngOnInit() {
+236:    this.unsubscribeActive = this.scriptService.getScriptsSnapshot((data) => {
+238:      this.loading.set(false);
+240:    this.unsubscribeTrash = this.scriptService.getTrashedScriptsSnapshot((data) => {
+246:    this.unsubscribeActive?.();
+247:    this.unsubscribeTrash?.();
+
+10- Read ngOnInit of history component
+
+bash
+
+sed -n '230,250p' /tmp/aria_project/ARIA-OS---1912-main/src/app/components/history/history.component.ts
+Sortie
+
+    }
+    
+    return list;
+  });
+
+  ngOnInit() {
+    this.unsubscribeActive = this.scriptService.getScriptsSnapshot((data) => {
+      this.activeScripts.set(data);
+      this.loading.set(false);
+    });
+    this.unsubscribeTrash = this.scriptService.getTrashedScriptsSnapshot((data) => {
+      this.trashedScripts.set(data);
+    });
+  }
+
+  ngOnDestroy() {
+    this.unsubscribeActive?.();
+    this.unsubscribeTrash?.();
+  }
+
+  setTab(tab: 'active' | 'trash') {
+
+11- Check history component imports
+
+bash
+
+# Patch history.component.ts ngOnInit
+# 1. Add AuthService import
+# 2. inject authService
+# 3. Make ngOnInit async with waitForAuthReady
+# Also fix filteredAndSortedScripts to handle INSERT case
+
+# First check the imports line
+head -15 /tmp/aria_project/ARIA-OS---1912-main/src/app/components/history/history.component.ts
+Sortie
+
+import { Component, OnInit, OnDestroy, signal, computed, inject, ChangeDetectionStrategy } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { Router } from '@angular/router';
+import { FormsModule } from '@angular/forms';
+import { MatIconModule } from '@angular/material/icon';
+
+import { ScriptService, ScriptData } from '../../services/script.service';
+import { ToastService } from '../../services/toast.service';
+import { HapticService } from '../../services/haptic.service';
+import { LanguageService } from '../../services/language.service';
+import { TranslatePipe } from '../../pipes/translate.pipe';
+
+import { ScriptCardComponent } from './script-card.component';
+import { ScriptDetailsModalComponent } from './script-details-modal.component';
+
+
+12- Add AuthService import to history component
+
+import { Component, OnInit, OnDestroy, signal, computed, inject, ChangeDetectionStrategy } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { Router } from '@angular/router';
+import { FormsModule } from '@angular/forms';
+import { MatIconModule } from '@angular/material/icon';
+
+import { ScriptService, ScriptData } from '../../services/script.service';
+import { AuthService } from '../../services/auth.service';
+import { ToastService } from '../../services/toast.service';
+import { HapticService } from '../../services/haptic.service';
+import { LanguageService } from '../../services/language.service';
+import { TranslatePipe } from '../../pipes/translate.pipe';
+
+import { ScriptCardComponent } from './script-card.component';
+import { ScriptDetailsModalComponent } from './script-details-modal.component';
+
+@Component({
+  selector: 'app-history',
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [
+    CommonModule,
+    FormsModule,
+    MatIconModule,
+    TranslatePipe,
+    ScriptCardComponent,
+    ScriptDetailsModalComponent
+  ],
+  template: `
+    <div class="p-6 max-w-5xl mx-auto space-y-12 pb-32 animate-in fade-in duration-700">
+      
+      <!-- Header Area -->
+      <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-8 mt-4">
+        <div class="space-y-3">
+          <h2 class="text-4xl font-black tracking-tighter text-gray-900 dark:text-white uppercase">{{ 'history.title' | translate }}</h2>
+          <p class="text-sm font-bold text-gray-400 dark:text-gray-500 uppercase tracking-[0.3em]">{{ 'history.desc' | translate }}</p>
+        </div>
+
+        <!-- Tabs Switcher -->
+        <div class="flex bg-gray-100 dark:bg-black/40 p-1.5 rounded-[20px] border border-gray-100 dark:border-white/5 shadow-inner">
+          <button (click)="setTab('active')" 
+                  class="px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all duration-300"
+                  [class.bg-white]="currentTab() === 'active'"
+                  [class.dark:bg-white/10]="currentTab() === 'active'"
+                  [class.shadow-xl]="currentTab() === 'active'"
+                  [class.text-violet-600]="currentTab() === 'active'"
+                  [class.text-gray-400]="currentTab() !== 'active'">
+            Active ({{ activeScripts().length }})
+          </button>
+          <button (click)="setTab('trash')" 
+                  class="px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 flex items-center gap-2"
+                  [class.bg-white]="currentTab() === 'trash'"
+                  [class.dark:bg-white/10]="currentTab() === 'trash'"
+                  [class.shadow-xl]="currentTab() === 'trash'"
+                  [class.text-red-500]="currentTab() === 'trash'"
+                  [class.text-gray-400]="currentTab() !== 'trash'">
+            Corbeille ({{ trashedScripts().length }})
+          </button>
+        </div>
+      </div>
+
+      <!-- Search & Sort Bar -->
+      <div class="flex flex-col sm:flex-row gap-4">
+        <div class="relative flex-1 group">
+          <mat-icon class="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-violet-500 transition-colors">search</mat-icon>
+          <input 
+            type="text" 
+            [ngModel]="searchQuery()"
+            (ngModelChange)="searchQuery.set($event)"
+            [placeholder]="'history.search' | translate" 
+            class="w-full pl-14 pr-6 py-4 bg-white dark:bg-[#1C1C1E] border border-gray-100 dark:border-white/5 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all font-bold text-gray-900 dark:text-white"
+          >
+        </div>
+        <div class="relative group">
+          <select 
+            [ngModel]="sortBy()"
+            (ngModelChange)="sortBy.set($event)"
+            class="bg-white dark:bg-[#1C1C1E] border border-gray-100 dark:border-white/5 rounded-2xl text-xs font-black uppercase tracking-widest pl-5 pr-12 py-4 outline-none focus:ring-2 focus:ring-violet-500/20 transition-all appearance-none h-full text-gray-900 dark:text-white min-w-[180px]"
+          >
+            <option value="dateDesc">{{ 'history.sort.recent' | translate }}</option>
+            <option value="dateAsc">{{ 'history.sort.old' | translate }}</option>
+            <option value="titleAsc">{{ 'history.sort.az' | translate }}</option>
+            <option value="titleDesc">{{ 'history.sort.za' | translate }}</option>
+          </select>
+          <mat-icon class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">expand_more</mat-icon>
+        </div>
+      </div>
+
+      <!-- Scripts Grid -->
+      @if (loading()) {
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+          @for (i of [1,2,3,4]; track i) {
+            <div class="h-64 rounded-[2.5rem] bg-gray-100 dark:bg-white/5 animate-pulse border border-gray-100 dark:border-white/5"></div>
+          }
+        </div>
+      } @else if (filteredAndSortedScripts().length === 0) {
+        <div class="bg-white dark:bg-[#1C1C1E] rounded-[3rem] p-20 text-center border border-gray-100 dark:border-white/5 shadow-2xl mt-8 animate-in fade-in zoom-in-95 duration-500">
+          <div class="w-24 h-24 bg-violet-500/10 rounded-full flex items-center justify-center mx-auto mb-8">
+            <mat-icon class="text-5xl text-violet-500">{{ currentTab() === 'trash' ? 'delete_sweep' : 'history' }}</mat-icon>
+          </div>
+          <h3 class="text-2xl font-black text-gray-900 dark:text-white mb-3 uppercase tracking-tight">
+            {{ (searchQuery() ? 'history.noResults' : 'history.empty') | translate }}
+          </h3>
+          <p class="text-sm font-bold text-gray-400 uppercase tracking-widest max-w-sm mx-auto">
+            {{ (searchQuery() ? 'history.searchEmptyDesc' : 'history.emptyDesc') | translate }}
+          </p>
+        </div>
+      } @else {
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+          @for (script of filteredAndSortedScripts(); track script.id) {
+            <app-script-card 
+              [script]="script"
+              [isTrashed]="currentTab() === 'trash'"
+              (select)="openScript(script)"
+              (pin)="togglePin(script)"
+              (copy)="copyScript(script)"
+              (delete)="confirmDelete(script)"
+              (restore)="restoreScript(script)"
+              (hardDelete)="confirmHardDelete(script)"
+            />
+          }
+        </div>
+      }
+    </div>
+
+    <!-- Modals -->
+    @if (selectedScript()) {
+      <app-script-details-modal 
+        [script]="selectedScript()!"
+        (close)="closeScript()"
+        (edit)="editScript(selectedScript()!)"
+        (goToStudio)="goToStudio(selectedScript()!)"
+      />
+    }
+
+    <!-- Soft Delete Confirm -->
+    @if (scriptToDelete()) {
+      <div class="fixed inset-0 bg-gray-950/80 backdrop-blur-xl z-[150] flex items-center justify-center p-6 animate-in fade-in duration-300" (click)="scriptToDelete.set(null)">
+        <div class="bg-white dark:bg-[#111] rounded-[3rem] p-10 text-center space-y-8 max-w-md border border-white/5 shadow-2xl animate-in zoom-in-95 duration-300" (click)="$event.stopPropagation()">
+          <div class="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mx-auto text-red-500">
+            <mat-icon class="text-4xl">delete_outline</mat-icon>
+          </div>
+          <div class="space-y-2">
+            <h3 class="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tight">{{ 'history.trash.confirmTitle' | translate }}</h3>
+            <p class="text-sm font-bold text-gray-400 uppercase tracking-widest">{{ 'history.trash.confirmDesc' | translate }}</p>
+          </div>
+          <div class="flex gap-4">
+            <button (click)="scriptToDelete.set(null)" class="flex-1 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest bg-gray-100 dark:bg-white/5 text-gray-500">{{ 'common.cancel' | translate }}</button>
+            <button (click)="executeDelete()" class="flex-1 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest bg-red-600 text-white shadow-xl shadow-red-500/20">{{ 'common.confirm' | translate }}</button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Hard Delete Confirm -->
+    @if (scriptToHardDelete()) {
+      <div class="fixed inset-0 bg-gray-950/90 backdrop-blur-2xl z-[150] flex items-center justify-center p-6 animate-in fade-in duration-300" (click)="scriptToHardDelete.set(null)">
+        <div class="bg-white dark:bg-[#111] rounded-[3rem] p-10 text-center space-y-8 max-w-md border border-red-500/20 shadow-2xl animate-in zoom-in-95 duration-300" (click)="$event.stopPropagation()">
+          <div class="w-24 h-24 bg-red-600/10 rounded-full flex items-center justify-center mx-auto text-red-600">
+            <mat-icon class="text-5xl">delete_forever</mat-icon>
+          </div>
+          <div class="space-y-2">
+            <h3 class="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tight">{{ 'history.trash.hardConfirmTitle' | translate }}</h3>
+            <p class="text-sm font-bold text-gray-400 uppercase tracking-widest">{{ 'history.trash.hardConfirmDesc' | translate }}</p>
+          </div>
+          <div class="flex gap-4">
+            <button (click)="scriptToHardDelete.set(null)" class="flex-1 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest bg-gray-100 dark:bg-white/5 text-gray-500">{{ 'common.cancel' | translate }}</button>
+            <button (click)="executeHardDelete()" class="flex-1 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest bg-red-600 text-white shadow-xl shadow-red-500/40">{{ 'history.actions.delete' | translate }}</button>
+          </div>
+        </div>
+      </div>
+    }
+  `,
+  styles: [`
+    :host { display: block; min-height: 100vh; background: transparent; }
+  `]
+})
+export class HistoryComponent implements OnInit, OnDestroy {
+  private scriptService = inject(ScriptService);
+  private authService = inject(AuthService);
+  private router = inject(Router);
+  private toastService = inject(ToastService);
+  private hapticService = inject(HapticService);
+  public languageService = inject(LanguageService);
+
+  activeScripts = signal<ScriptData[]>([]);
+  trashedScripts = signal<ScriptData[]>([]);
+  loading = signal(true);
+  
+  currentTab = signal<'active' | 'trash'>('active');
+  searchQuery = signal('');
+  sortBy = signal<'dateDesc' | 'dateAsc' | 'titleAsc' | 'titleDesc'>('dateDesc');
+
+  selectedScript = signal<ScriptData | null>(null);
+  scriptToDelete = signal<ScriptData | null>(null);
+  scriptToHardDelete = signal<ScriptData | null>(null);
+  
+  private unsubscribeActive?: () => void;
+  private unsubscribeTrash?: () => void;
+
+  filteredAndSortedScripts = computed(() => {
+    let list = this.currentTab() === 'active' ? [...this.activeScripts()] : [...this.trashedScripts()];
+    
+    // Sort
+    list.sort((a, b) => {
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+
+      const timeA = new Date(a.createdAt).getTime() || 0;
+      const timeB = new Date(b.createdAt).getTime() || 0;
+      const titleA = (a.title || a.intention + ' ' + a.tone).toLowerCase();
+      const titleB = (b.title || b.intention + ' ' + b.tone).toLowerCase();
+
+      switch (this.sortBy()) {
+        case 'dateAsc': return timeA - timeB;
+        case 'titleAsc': return titleA.localeCompare(titleB);
+        case 'titleDesc': return titleB.localeCompare(titleA);
+        case 'dateDesc':
+        default: return timeB - timeA;
+      }
+    });
+
+    // Search
+    const query = this.searchQuery().toLowerCase().trim();
+    if (query) {
+      list = list.filter(s => 
+        (s.title && s.title.toLowerCase().includes(query)) ||
+        s.intention.toLowerCase().includes(query) || 
+        s.tone.toLowerCase().includes(query) || 
+        s.content.toLowerCase().includes(query)
+      );
+    }
+    
+    return list;
+  });
+
+  async ngOnInit() {
+    // Await auth so scriptService.getScriptsSnapshot finds a valid user
+    // and does not return an empty no-op unsubscriber.
+    await this.authService.waitForAuthReady();
+
+    this.unsubscribeActive = this.scriptService.getScriptsSnapshot((data) => {
+      this.activeScripts.set(data);
+      this.loading.set(false);
+    });
+    this.unsubscribeTrash = this.scriptService.getTrashedScriptsSnapshot((data) => {
+      this.trashedScripts.set(data);
+    });
+  }
+
+  ngOnDestroy() {
+    this.unsubscribeActive?.();
+    this.unsubscribeTrash?.();
+  }
+
+  setTab(tab: 'active' | 'trash') {
+    this.hapticService.lightImpact();
+    this.currentTab.set(tab);
+  }
+
+  async togglePin(script: ScriptData) {
+    if (!script.id) return;
+    this.hapticService.mediumImpact();
+    try {
+      await this.scriptService.updateScript(script.id, { pinned: !script.pinned });
+      this.toastService.success(script.pinned ? 'Script désépinglé' : 'Script épinglé');
+    } catch (e) {
+      this.hapticService.error();
+    }
+  }
+
+  openScript(script: ScriptData) {
+    this.hapticService.lightImpact();
+    this.selectedScript.set(script);
+  }
+
+  closeScript() {
+    this.selectedScript.set(null);
+  }
+
+  copyScript(script: ScriptData) {
+    navigator.clipboard.writeText(script.content).then(() => {
+      this.hapticService.success();
+      this.toastService.success('Copié !');
+    });
+  }
+
+  confirmDelete(script: ScriptData) {
+    this.hapticService.mediumImpact();
+    this.scriptToDelete.set(script);
+  }
+
+  async executeDelete() {
+    const script = this.scriptToDelete();
+    if (!script?.id) return;
+    try {
+      await this.scriptService.moveToTrash(script.id);
+      this.scriptToDelete.set(null);
+      this.hapticService.success();
+    } catch (e) {
+      this.hapticService.error();
+    }
+  }
+
+  async restoreScript(script: ScriptData) {
+    if (!script.id) return;
+    this.hapticService.mediumImpact();
+    try {
+      await this.scriptService.restoreScript(script.id);
+      this.toastService.success('Script restauré');
+      this.hapticService.success();
+    } catch (e) {
+      this.hapticService.error();
+    }
+  }
+
+  confirmHardDelete(script: ScriptData) {
+    this.hapticService.mediumImpact();
+    this.scriptToHardDelete.set(script);
+  }
+
+  async executeHardDelete() {
+    const script = this.scriptToHardDelete();
+    if (!script?.id) return;
+    try {
+      await this.scriptService.deleteScript(script.id);
+      this.scriptToHardDelete.set(null);
+      this.hapticService.success();
+    } catch (e) {
+      this.hapticService.error();
+    }
+  }
+
+  editScript(script: ScriptData) {
+    this.hapticService.mediumImpact();
+    this.router.navigate(['/'], { state: { scriptToEdit: script } });
+  }
+
+  goToStudio(script: ScriptData) {
+    this.hapticService.mediumImpact();
+    const title = (script.title || `${script.intention} - ${script.tone}`);
+    this.router.navigate(['/studio'], { state: { scriptContent: script.content, scriptTitle: title } });
+  }
+}
+
+13-Find inject declarations in history
+
+bash
+
+grep -n "private scriptService\|private router\|private toastService\|private hapticService\|public languageService" /tmp/aria_patched/src/app/components/history/history.component.ts
+Sortie
+
+179:  private scriptService = inject(ScriptService);
+180:  private router = inject(Router);
+181:  private toastService = inject(ToastService);
+182:  private hapticService = inject(HapticService);
+183:  public languageService = inject(LanguageService);
+
+14- Inject AuthService and fix ngOnInit in history component
+
+import { Component, OnInit, OnDestroy, signal, computed, inject, ChangeDetectionStrategy } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { Router } from '@angular/router';
+import { FormsModule } from '@angular/forms';
+import { MatIconModule } from '@angular/material/icon';
+
+import { ScriptService, ScriptData } from '../../services/script.service';
+import { AuthService } from '../../services/auth.service';
+import { ToastService } from '../../services/toast.service';
+import { HapticService } from '../../services/haptic.service';
+import { LanguageService } from '../../services/language.service';
+import { TranslatePipe } from '../../pipes/translate.pipe';
+
+import { ScriptCardComponent } from './script-card.component';
+import { ScriptDetailsModalComponent } from './script-details-modal.component';
+
+@Component({
+  selector: 'app-history',
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [
+    CommonModule,
+    FormsModule,
+    MatIconModule,
+    TranslatePipe,
+    ScriptCardComponent,
+    ScriptDetailsModalComponent
+  ],
+  template: `
+    <div class="p-6 max-w-5xl mx-auto space-y-12 pb-32 animate-in fade-in duration-700">
+      
+      <!-- Header Area -->
+      <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-8 mt-4">
+        <div class="space-y-3">
+          <h2 class="text-4xl font-black tracking-tighter text-gray-900 dark:text-white uppercase">{{ 'history.title' | translate }}</h2>
+          <p class="text-sm font-bold text-gray-400 dark:text-gray-500 uppercase tracking-[0.3em]">{{ 'history.desc' | translate }}</p>
+        </div>
+
+        <!-- Tabs Switcher -->
+        <div class="flex bg-gray-100 dark:bg-black/40 p-1.5 rounded-[20px] border border-gray-100 dark:border-white/5 shadow-inner">
+          <button (click)="setTab('active')" 
+                  class="px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all duration-300"
+                  [class.bg-white]="currentTab() === 'active'"
+                  [class.dark:bg-white/10]="currentTab() === 'active'"
+                  [class.shadow-xl]="currentTab() === 'active'"
+                  [class.text-violet-600]="currentTab() === 'active'"
+                  [class.text-gray-400]="currentTab() !== 'active'">
+            Active ({{ activeScripts().length }})
+          </button>
+          <button (click)="setTab('trash')" 
+                  class="px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 flex items-center gap-2"
+                  [class.bg-white]="currentTab() === 'trash'"
+                  [class.dark:bg-white/10]="currentTab() === 'trash'"
+                  [class.shadow-xl]="currentTab() === 'trash'"
+                  [class.text-red-500]="currentTab() === 'trash'"
+                  [class.text-gray-400]="currentTab() !== 'trash'">
+            Corbeille ({{ trashedScripts().length }})
+          </button>
+        </div>
+      </div>
+
+      <!-- Search & Sort Bar -->
+      <div class="flex flex-col sm:flex-row gap-4">
+        <div class="relative flex-1 group">
+          <mat-icon class="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-violet-500 transition-colors">search</mat-icon>
+          <input 
+            type="text" 
+            [ngModel]="searchQuery()"
+            (ngModelChange)="searchQuery.set($event)"
+            [placeholder]="'history.search' | translate" 
+            class="w-full pl-14 pr-6 py-4 bg-white dark:bg-[#1C1C1E] border border-gray-100 dark:border-white/5 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all font-bold text-gray-900 dark:text-white"
+          >
+        </div>
+        <div class="relative group">
+          <select 
+            [ngModel]="sortBy()"
+            (ngModelChange)="sortBy.set($event)"
+            class="bg-white dark:bg-[#1C1C1E] border border-gray-100 dark:border-white/5 rounded-2xl text-xs font-black uppercase tracking-widest pl-5 pr-12 py-4 outline-none focus:ring-2 focus:ring-violet-500/20 transition-all appearance-none h-full text-gray-900 dark:text-white min-w-[180px]"
+          >
+            <option value="dateDesc">{{ 'history.sort.recent' | translate }}</option>
+            <option value="dateAsc">{{ 'history.sort.old' | translate }}</option>
+            <option value="titleAsc">{{ 'history.sort.az' | translate }}</option>
+            <option value="titleDesc">{{ 'history.sort.za' | translate }}</option>
+          </select>
+          <mat-icon class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">expand_more</mat-icon>
+        </div>
+      </div>
+
+      <!-- Scripts Grid -->
+      @if (loading()) {
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+          @for (i of [1,2,3,4]; track i) {
+            <div class="h-64 rounded-[2.5rem] bg-gray-100 dark:bg-white/5 animate-pulse border border-gray-100 dark:border-white/5"></div>
+          }
+        </div>
+      } @else if (filteredAndSortedScripts().length === 0) {
+        <div class="bg-white dark:bg-[#1C1C1E] rounded-[3rem] p-20 text-center border border-gray-100 dark:border-white/5 shadow-2xl mt-8 animate-in fade-in zoom-in-95 duration-500">
+          <div class="w-24 h-24 bg-violet-500/10 rounded-full flex items-center justify-center mx-auto mb-8">
+            <mat-icon class="text-5xl text-violet-500">{{ currentTab() === 'trash' ? 'delete_sweep' : 'history' }}</mat-icon>
+          </div>
+          <h3 class="text-2xl font-black text-gray-900 dark:text-white mb-3 uppercase tracking-tight">
+            {{ (searchQuery() ? 'history.noResults' : 'history.empty') | translate }}
+          </h3>
+          <p class="text-sm font-bold text-gray-400 uppercase tracking-widest max-w-sm mx-auto">
+            {{ (searchQuery() ? 'history.searchEmptyDesc' : 'history.emptyDesc') | translate }}
+          </p>
+        </div>
+      } @else {
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+          @for (script of filteredAndSortedScripts(); track script.id) {
+            <app-script-card 
+              [script]="script"
+              [isTrashed]="currentTab() === 'trash'"
+              (select)="openScript(script)"
+              (pin)="togglePin(script)"
+              (copy)="copyScript(script)"
+              (delete)="confirmDelete(script)"
+              (restore)="restoreScript(script)"
+              (hardDelete)="confirmHardDelete(script)"
+            />
+          }
+        </div>
+      }
+    </div>
+
+    <!-- Modals -->
+    @if (selectedScript()) {
+      <app-script-details-modal 
+        [script]="selectedScript()!"
+        (close)="closeScript()"
+        (edit)="editScript(selectedScript()!)"
+        (goToStudio)="goToStudio(selectedScript()!)"
+      />
+    }
+
+    <!-- Soft Delete Confirm -->
+    @if (scriptToDelete()) {
+      <div class="fixed inset-0 bg-gray-950/80 backdrop-blur-xl z-[150] flex items-center justify-center p-6 animate-in fade-in duration-300" (click)="scriptToDelete.set(null)">
+        <div class="bg-white dark:bg-[#111] rounded-[3rem] p-10 text-center space-y-8 max-w-md border border-white/5 shadow-2xl animate-in zoom-in-95 duration-300" (click)="$event.stopPropagation()">
+          <div class="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mx-auto text-red-500">
+            <mat-icon class="text-4xl">delete_outline</mat-icon>
+          </div>
+          <div class="space-y-2">
+            <h3 class="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tight">{{ 'history.trash.confirmTitle' | translate }}</h3>
+            <p class="text-sm font-bold text-gray-400 uppercase tracking-widest">{{ 'history.trash.confirmDesc' | translate }}</p>
+          </div>
+          <div class="flex gap-4">
+            <button (click)="scriptToDelete.set(null)" class="flex-1 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest bg-gray-100 dark:bg-white/5 text-gray-500">{{ 'common.cancel' | translate }}</button>
+            <button (click)="executeDelete()" class="flex-1 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest bg-red-600 text-white shadow-xl shadow-red-500/20">{{ 'common.confirm' | translate }}</button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Hard Delete Confirm -->
+    @if (scriptToHardDelete()) {
+      <div class="fixed inset-0 bg-gray-950/90 backdrop-blur-2xl z-[150] flex items-center justify-center p-6 animate-in fade-in duration-300" (click)="scriptToHardDelete.set(null)">
+        <div class="bg-white dark:bg-[#111] rounded-[3rem] p-10 text-center space-y-8 max-w-md border border-red-500/20 shadow-2xl animate-in zoom-in-95 duration-300" (click)="$event.stopPropagation()">
+          <div class="w-24 h-24 bg-red-600/10 rounded-full flex items-center justify-center mx-auto text-red-600">
+            <mat-icon class="text-5xl">delete_forever</mat-icon>
+          </div>
+          <div class="space-y-2">
+            <h3 class="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tight">{{ 'history.trash.hardConfirmTitle' | translate }}</h3>
+            <p class="text-sm font-bold text-gray-400 uppercase tracking-widest">{{ 'history.trash.hardConfirmDesc' | translate }}</p>
+          </div>
+          <div class="flex gap-4">
+            <button (click)="scriptToHardDelete.set(null)" class="flex-1 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest bg-gray-100 dark:bg-white/5 text-gray-500">{{ 'common.cancel' | translate }}</button>
+            <button (click)="executeHardDelete()" class="flex-1 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest bg-red-600 text-white shadow-xl shadow-red-500/40">{{ 'history.actions.delete' | translate }}</button>
+          </div>
+        </div>
+      </div>
+    }
+  `,
+  styles: [`
+    :host { display: block; min-height: 100vh; background: transparent; }
+  `]
+})
+export class HistoryComponent implements OnInit, OnDestroy {
+  private scriptService = inject(ScriptService);
+  private authService = inject(AuthService);
+  private router = inject(Router);
+  private toastService = inject(ToastService);
+  private hapticService = inject(HapticService);
+  public languageService = inject(LanguageService);
+
+  activeScripts = signal<ScriptData[]>([]);
+  trashedScripts = signal<ScriptData[]>([]);
+  loading = signal(true);
+  
+  currentTab = signal<'active' | 'trash'>('active');
+  searchQuery = signal('');
+  sortBy = signal<'dateDesc' | 'dateAsc' | 'titleAsc' | 'titleDesc'>('dateDesc');
+
+  selectedScript = signal<ScriptData | null>(null);
+  scriptToDelete = signal<ScriptData | null>(null);
+  scriptToHardDelete = signal<ScriptData | null>(null);
+  
+  private unsubscribeActive?: () => void;
+  private unsubscribeTrash?: () => void;
+
+  filteredAndSortedScripts = computed(() => {
+    let list = this.currentTab() === 'active' ? [...this.activeScripts()] : [...this.trashedScripts()];
+    
+    // Sort
+    list.sort((a, b) => {
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+
+      const timeA = new Date(a.createdAt).getTime() || 0;
+      const timeB = new Date(b.createdAt).getTime() || 0;
+      const titleA = (a.title || a.intention + ' ' + a.tone).toLowerCase();
+      const titleB = (b.title || b.intention + ' ' + b.tone).toLowerCase();
+
+      switch (this.sortBy()) {
+        case 'dateAsc': return timeA - timeB;
+        case 'titleAsc': return titleA.localeCompare(titleB);
+        case 'titleDesc': return titleB.localeCompare(titleA);
+        case 'dateDesc':
+        default: return timeB - timeA;
+      }
+    });
+
+    // Search
+    const query = this.searchQuery().toLowerCase().trim();
+    if (query) {
+      list = list.filter(s => 
+        (s.title && s.title.toLowerCase().includes(query)) ||
+        s.intention.toLowerCase().includes(query) || 
+        s.tone.toLowerCase().includes(query) || 
+        s.content.toLowerCase().includes(query)
+      );
+    }
+    
+    return list;
+  });
+
+  async ngOnInit() {
+    // Await auth so scriptService.getScriptsSnapshot finds a valid user
+    // and does not return an empty no-op unsubscriber.
+    await this.authService.waitForAuthReady();
+
+    this.unsubscribeActive = this.scriptService.getScriptsSnapshot((data) => {
+      this.activeScripts.set(data);
+      this.loading.set(false);
+    });
+    this.unsubscribeTrash = this.scriptService.getTrashedScriptsSnapshot((data) => {
+      this.trashedScripts.set(data);
+    });
+  }
+
+  ngOnDestroy() {
+    this.unsubscribeActive?.();
+    this.unsubscribeTrash?.();
+  }
+
+  setTab(tab: 'active' | 'trash') {
+    this.hapticService.lightImpact();
+    this.currentTab.set(tab);
+  }
+
+  async togglePin(script: ScriptData) {
+    if (!script.id) return;
+    this.hapticService.mediumImpact();
+    try {
+      await this.scriptService.updateScript(script.id, { pinned: !script.pinned });
+      this.toastService.success(script.pinned ? 'Script désépinglé' : 'Script épinglé');
+    } catch (e) {
+      this.hapticService.error();
+    }
+  }
+
+  openScript(script: ScriptData) {
+    this.hapticService.lightImpact();
+    this.selectedScript.set(script);
+  }
+
+  closeScript() {
+    this.selectedScript.set(null);
+  }
+
+  copyScript(script: ScriptData) {
+    navigator.clipboard.writeText(script.content).then(() => {
+      this.hapticService.success();
+      this.toastService.success('Copié !');
+    });
+  }
+
+  confirmDelete(script: ScriptData) {
+    this.hapticService.mediumImpact();
+    this.scriptToDelete.set(script);
+  }
+
+  async executeDelete() {
+    const script = this.scriptToDelete();
+    if (!script?.id) return;
+    try {
+      await this.scriptService.moveToTrash(script.id);
+      this.scriptToDelete.set(null);
+      this.hapticService.success();
+    } catch (e) {
+      this.hapticService.error();
+    }
+  }
+
+  async restoreScript(script: ScriptData) {
+    if (!script.id) return;
+    this.hapticService.mediumImpact();
+    try {
+      await this.scriptService.restoreScript(script.id);
+      this.toastService.success('Script restauré');
+      this.hapticService.success();
+    } catch (e) {
+      this.hapticService.error();
+    }
+  }
+
+  confirmHardDelete(script: ScriptData) {
+    this.hapticService.mediumImpact();
+    this.scriptToHardDelete.set(script);
+  }
+
+  async executeHardDelete() {
+    const script = this.scriptToHardDelete();
+    if (!script?.id) return;
+    try {
+      await this.scriptService.deleteScript(script.id);
+      this.scriptToHardDelete.set(null);
+      this.hapticService.success();
+    } catch (e) {
+      this.hapticService.error();
+    }
+  }
+
+  editScript(script: ScriptData) {
+    this.hapticService.mediumImpact();
+    this.router.navigate(['/'], { state: { scriptToEdit: script } });
+  }
+
+  goToStudio(script: ScriptData) {
+    this.hapticService.mediumImpact();
+    const title = (script.title || `${script.intention} - ${script.tone}`);
+    this.router.navigate(['/studio'], { state: { scriptContent: script.content, scriptTitle: title } });
+  }
+}
+
+15- Make history ngOnInit async with waitForAuthReady
+
+import { Component, OnInit, OnDestroy, signal, computed, inject, ChangeDetectionStrategy } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { Router } from '@angular/router';
+import { FormsModule } from '@angular/forms';
+import { MatIconModule } from '@angular/material/icon';
+
+import { ScriptService, ScriptData } from '../../services/script.service';
+import { AuthService } from '../../services/auth.service';
+import { ToastService } from '../../services/toast.service';
+import { HapticService } from '../../services/haptic.service';
+import { LanguageService } from '../../services/language.service';
+import { TranslatePipe } from '../../pipes/translate.pipe';
+
+import { ScriptCardComponent } from './script-card.component';
+import { ScriptDetailsModalComponent } from './script-details-modal.component';
+
+@Component({
+  selector: 'app-history',
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [
+    CommonModule,
+    FormsModule,
+    MatIconModule,
+    TranslatePipe,
+    ScriptCardComponent,
+    ScriptDetailsModalComponent
+  ],
+  template: `
+    <div class="p-6 max-w-5xl mx-auto space-y-12 pb-32 animate-in fade-in duration-700">
+      
+      <!-- Header Area -->
+      <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-8 mt-4">
+        <div class="space-y-3">
+          <h2 class="text-4xl font-black tracking-tighter text-gray-900 dark:text-white uppercase">{{ 'history.title' | translate }}</h2>
+          <p class="text-sm font-bold text-gray-400 dark:text-gray-500 uppercase tracking-[0.3em]">{{ 'history.desc' | translate }}</p>
+        </div>
+
+        <!-- Tabs Switcher -->
+        <div class="flex bg-gray-100 dark:bg-black/40 p-1.5 rounded-[20px] border border-gray-100 dark:border-white/5 shadow-inner">
+          <button (click)="setTab('active')" 
+                  class="px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all duration-300"
+                  [class.bg-white]="currentTab() === 'active'"
+                  [class.dark:bg-white/10]="currentTab() === 'active'"
+                  [class.shadow-xl]="currentTab() === 'active'"
+                  [class.text-violet-600]="currentTab() === 'active'"
+                  [class.text-gray-400]="currentTab() !== 'active'">
+            Active ({{ activeScripts().length }})
+          </button>
+          <button (click)="setTab('trash')" 
+                  class="px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 flex items-center gap-2"
+                  [class.bg-white]="currentTab() === 'trash'"
+                  [class.dark:bg-white/10]="currentTab() === 'trash'"
+                  [class.shadow-xl]="currentTab() === 'trash'"
+                  [class.text-red-500]="currentTab() === 'trash'"
+                  [class.text-gray-400]="currentTab() !== 'trash'">
+            Corbeille ({{ trashedScripts().length }})
+          </button>
+        </div>
+      </div>
+
+      <!-- Search & Sort Bar -->
+      <div class="flex flex-col sm:flex-row gap-4">
+        <div class="relative flex-1 group">
+          <mat-icon class="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-violet-500 transition-colors">search</mat-icon>
+          <input 
+            type="text" 
+            [ngModel]="searchQuery()"
+            (ngModelChange)="searchQuery.set($event)"
+            [placeholder]="'history.search' | translate" 
+            class="w-full pl-14 pr-6 py-4 bg-white dark:bg-[#1C1C1E] border border-gray-100 dark:border-white/5 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all font-bold text-gray-900 dark:text-white"
+          >
+        </div>
+        <div class="relative group">
+          <select 
+            [ngModel]="sortBy()"
+            (ngModelChange)="sortBy.set($event)"
+            class="bg-white dark:bg-[#1C1C1E] border border-gray-100 dark:border-white/5 rounded-2xl text-xs font-black uppercase tracking-widest pl-5 pr-12 py-4 outline-none focus:ring-2 focus:ring-violet-500/20 transition-all appearance-none h-full text-gray-900 dark:text-white min-w-[180px]"
+          >
+            <option value="dateDesc">{{ 'history.sort.recent' | translate }}</option>
+            <option value="dateAsc">{{ 'history.sort.old' | translate }}</option>
+            <option value="titleAsc">{{ 'history.sort.az' | translate }}</option>
+            <option value="titleDesc">{{ 'history.sort.za' | translate }}</option>
+          </select>
+          <mat-icon class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">expand_more</mat-icon>
+        </div>
+      </div>
+
+      <!-- Scripts Grid -->
+      @if (loading()) {
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+          @for (i of [1,2,3,4]; track i) {
+            <div class="h-64 rounded-[2.5rem] bg-gray-100 dark:bg-white/5 animate-pulse border border-gray-100 dark:border-white/5"></div>
+          }
+        </div>
+      } @else if (filteredAndSortedScripts().length === 0) {
+        <div class="bg-white dark:bg-[#1C1C1E] rounded-[3rem] p-20 text-center border border-gray-100 dark:border-white/5 shadow-2xl mt-8 animate-in fade-in zoom-in-95 duration-500">
+          <div class="w-24 h-24 bg-violet-500/10 rounded-full flex items-center justify-center mx-auto mb-8">
+            <mat-icon class="text-5xl text-violet-500">{{ currentTab() === 'trash' ? 'delete_sweep' : 'history' }}</mat-icon>
+          </div>
+          <h3 class="text-2xl font-black text-gray-900 dark:text-white mb-3 uppercase tracking-tight">
+            {{ (searchQuery() ? 'history.noResults' : 'history.empty') | translate }}
+          </h3>
+          <p class="text-sm font-bold text-gray-400 uppercase tracking-widest max-w-sm mx-auto">
+            {{ (searchQuery() ? 'history.searchEmptyDesc' : 'history.emptyDesc') | translate }}
+          </p>
+        </div>
+      } @else {
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+          @for (script of filteredAndSortedScripts(); track script.id) {
+            <app-script-card 
+              [script]="script"
+              [isTrashed]="currentTab() === 'trash'"
+              (select)="openScript(script)"
+              (pin)="togglePin(script)"
+              (copy)="copyScript(script)"
+              (delete)="confirmDelete(script)"
+              (restore)="restoreScript(script)"
+              (hardDelete)="confirmHardDelete(script)"
+            />
+          }
+        </div>
+      }
+    </div>
+
+    <!-- Modals -->
+    @if (selectedScript()) {
+      <app-script-details-modal 
+        [script]="selectedScript()!"
+        (close)="closeScript()"
+        (edit)="editScript(selectedScript()!)"
+        (goToStudio)="goToStudio(selectedScript()!)"
+      />
+    }
+
+    <!-- Soft Delete Confirm -->
+    @if (scriptToDelete()) {
+      <div class="fixed inset-0 bg-gray-950/80 backdrop-blur-xl z-[150] flex items-center justify-center p-6 animate-in fade-in duration-300" (click)="scriptToDelete.set(null)">
+        <div class="bg-white dark:bg-[#111] rounded-[3rem] p-10 text-center space-y-8 max-w-md border border-white/5 shadow-2xl animate-in zoom-in-95 duration-300" (click)="$event.stopPropagation()">
+          <div class="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mx-auto text-red-500">
+            <mat-icon class="text-4xl">delete_outline</mat-icon>
+          </div>
+          <div class="space-y-2">
+            <h3 class="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tight">{{ 'history.trash.confirmTitle' | translate }}</h3>
+            <p class="text-sm font-bold text-gray-400 uppercase tracking-widest">{{ 'history.trash.confirmDesc' | translate }}</p>
+          </div>
+          <div class="flex gap-4">
+            <button (click)="scriptToDelete.set(null)" class="flex-1 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest bg-gray-100 dark:bg-white/5 text-gray-500">{{ 'common.cancel' | translate }}</button>
+            <button (click)="executeDelete()" class="flex-1 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest bg-red-600 text-white shadow-xl shadow-red-500/20">{{ 'common.confirm' | translate }}</button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Hard Delete Confirm -->
+    @if (scriptToHardDelete()) {
+      <div class="fixed inset-0 bg-gray-950/90 backdrop-blur-2xl z-[150] flex items-center justify-center p-6 animate-in fade-in duration-300" (click)="scriptToHardDelete.set(null)">
+        <div class="bg-white dark:bg-[#111] rounded-[3rem] p-10 text-center space-y-8 max-w-md border border-red-500/20 shadow-2xl animate-in zoom-in-95 duration-300" (click)="$event.stopPropagation()">
+          <div class="w-24 h-24 bg-red-600/10 rounded-full flex items-center justify-center mx-auto text-red-600">
+            <mat-icon class="text-5xl">delete_forever</mat-icon>
+          </div>
+          <div class="space-y-2">
+            <h3 class="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tight">{{ 'history.trash.hardConfirmTitle' | translate }}</h3>
+            <p class="text-sm font-bold text-gray-400 uppercase tracking-widest">{{ 'history.trash.hardConfirmDesc' | translate }}</p>
+          </div>
+          <div class="flex gap-4">
+            <button (click)="scriptToHardDelete.set(null)" class="flex-1 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest bg-gray-100 dark:bg-white/5 text-gray-500">{{ 'common.cancel' | translate }}</button>
+            <button (click)="executeHardDelete()" class="flex-1 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest bg-red-600 text-white shadow-xl shadow-red-500/40">{{ 'history.actions.delete' | translate }}</button>
+          </div>
+        </div>
+      </div>
+    }
+  `,
+  styles: [`
+    :host { display: block; min-height: 100vh; background: transparent; }
+  `]
+})
+export class HistoryComponent implements OnInit, OnDestroy {
+  private scriptService = inject(ScriptService);
+  private authService = inject(AuthService);
+  private router = inject(Router);
+  private toastService = inject(ToastService);
+  private hapticService = inject(HapticService);
+  public languageService = inject(LanguageService);
+
+  activeScripts = signal<ScriptData[]>([]);
+  trashedScripts = signal<ScriptData[]>([]);
+  loading = signal(true);
+  
+  currentTab = signal<'active' | 'trash'>('active');
+  searchQuery = signal('');
+  sortBy = signal<'dateDesc' | 'dateAsc' | 'titleAsc' | 'titleDesc'>('dateDesc');
+
+  selectedScript = signal<ScriptData | null>(null);
+  scriptToDelete = signal<ScriptData | null>(null);
+  scriptToHardDelete = signal<ScriptData | null>(null);
+  
+  private unsubscribeActive?: () => void;
+  private unsubscribeTrash?: () => void;
+
+  filteredAndSortedScripts = computed(() => {
+    let list = this.currentTab() === 'active' ? [...this.activeScripts()] : [...this.trashedScripts()];
+    
+    // Sort
+    list.sort((a, b) => {
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+
+      const timeA = new Date(a.createdAt).getTime() || 0;
+      const timeB = new Date(b.createdAt).getTime() || 0;
+      const titleA = (a.title || a.intention + ' ' + a.tone).toLowerCase();
+      const titleB = (b.title || b.intention + ' ' + b.tone).toLowerCase();
+
+      switch (this.sortBy()) {
+        case 'dateAsc': return timeA - timeB;
+        case 'titleAsc': return titleA.localeCompare(titleB);
+        case 'titleDesc': return titleB.localeCompare(titleA);
+        case 'dateDesc':
+        default: return timeB - timeA;
+      }
+    });
+
+    // Search
+    const query = this.searchQuery().toLowerCase().trim();
+    if (query) {
+      list = list.filter(s => 
+        (s.title && s.title.toLowerCase().includes(query)) ||
+        s.intention.toLowerCase().includes(query) || 
+        s.tone.toLowerCase().includes(query) || 
+        s.content.toLowerCase().includes(query)
+      );
+    }
+    
+    return list;
+  });
+
+  async ngOnInit() {
+    // Await auth so scriptService.getScriptsSnapshot finds a valid user
+    // and does not return an empty no-op unsubscriber.
+    await this.authService.waitForAuthReady();
+
+    this.unsubscribeActive = this.scriptService.getScriptsSnapshot((data) => {
+      this.activeScripts.set(data);
+      this.loading.set(false);
+    });
+    this.unsubscribeTrash = this.scriptService.getTrashedScriptsSnapshot((data) => {
+      this.trashedScripts.set(data);
+    });
+  }
+
+  ngOnDestroy() {
+    this.unsubscribeActive?.();
+    this.unsubscribeTrash?.();
+  }
+
+  setTab(tab: 'active' | 'trash') {
+    this.hapticService.lightImpact();
+    this.currentTab.set(tab);
+  }
+
+  async togglePin(script: ScriptData) {
+    if (!script.id) return;
+    this.hapticService.mediumImpact();
+    try {
+      await this.scriptService.updateScript(script.id, { pinned: !script.pinned });
+      this.toastService.success(script.pinned ? 'Script désépinglé' : 'Script épinglé');
+    } catch (e) {
+      this.hapticService.error();
+    }
+  }
+
+  openScript(script: ScriptData) {
+    this.hapticService.lightImpact();
+    this.selectedScript.set(script);
+  }
+
+  closeScript() {
+    this.selectedScript.set(null);
+  }
+
+  copyScript(script: ScriptData) {
+    navigator.clipboard.writeText(script.content).then(() => {
+      this.hapticService.success();
+      this.toastService.success('Copié !');
+    });
+  }
+
+  confirmDelete(script: ScriptData) {
+    this.hapticService.mediumImpact();
+    this.scriptToDelete.set(script);
+  }
+
+  async executeDelete() {
+    const script = this.scriptToDelete();
+    if (!script?.id) return;
+    try {
+      await this.scriptService.moveToTrash(script.id);
+      this.scriptToDelete.set(null);
+      this.hapticService.success();
+    } catch (e) {
+      this.hapticService.error();
+    }
+  }
+
+  async restoreScript(script: ScriptData) {
+    if (!script.id) return;
+    this.hapticService.mediumImpact();
+    try {
+      await this.scriptService.restoreScript(script.id);
+      this.toastService.success('Script restauré');
+      this.hapticService.success();
+    } catch (e) {
+      this.hapticService.error();
+    }
+  }
+
+  confirmHardDelete(script: ScriptData) {
+    this.hapticService.mediumImpact();
+    this.scriptToHardDelete.set(script);
+  }
+
+  async executeHardDelete() {
+    const script = this.scriptToHardDelete();
+    if (!script?.id) return;
+    try {
+      await this.scriptService.deleteScript(script.id);
+      this.scriptToHardDelete.set(null);
+      this.hapticService.success();
+    } catch (e) {
+      this.hapticService.error();
+    }
+  }
+
+  editScript(script: ScriptData) {
+    this.hapticService.mediumImpact();
+    this.router.navigate(['/'], { state: { scriptToEdit: script } });
+  }
+
+  goToStudio(script: ScriptData) {
+    this.hapticService.mediumImpact();
+    const title = (script.title || `${script.intention} - ${script.tone}`);
+    this.router.navigate(['/studio'], { state: { scriptContent: script.content, scriptTitle: title } });
+  }
+}
+
+16- Check settings component decorator
+
+bash
+
+# Fix settings component: add ChangeDetectionStrategy.OnPush + await auth
+grep -n "ChangeDetectionStrategy\|@Component\|selector\|standalone\|imports\|template" /tmp/aria_project/ARIA-OS---1912-main/src/app/components/settings/settings.component.ts | head -10
+Sortie
+
+12:@Component({
+13:  selector: 'app-settings',
+14:  standalone: true,
+15:  imports: [MatIconModule, DatePipe, FormsModule, TranslatePipe],
+16:  template: `
+
+17- Add OnPush to settings component decorator
+
+import { Component, OnInit, OnDestroy, signal, inject, ChangeDetectionStrategy } from '@angular/core';
+import { AuthService } from '../../services/auth.service';
+import { ThemeService } from '../../services/theme.service';
+import { UserService, UserProfile } from '../../services/user.service';
+import { LanguageService } from '../../services/language.service';
+import { Router } from '@angular/router';
+import { AuthService as _AuthServiceForWait } from '../../services/auth.service';
+import { MatIconModule } from '@angular/material/icon';
+import { DatePipe } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { TranslatePipe } from '../../pipes/translate.pipe';
+
+@Component({
+  selector: 'app-settings',
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [MatIconModule, DatePipe, FormsModule, TranslatePipe],
+  template: `
+    <div class="p-4 max-w-3xl mx-auto space-y-8 pb-24">
+      <div class="space-y-1 px-2">
+        <h2 class="text-2xl font-semibold tracking-tight">{{ 'settings.title' | translate }}</h2>
+        <p class="text-base text-gray-500 dark:text-gray-400">{{ 'settings.desc' | translate }}</p>
+      </div>
+      
+      <!-- Profile Section -->
+      <div class="bg-white dark:bg-[#111] border border-gray-200 dark:border-gray-800 rounded-3xl p-6 shadow-sm">
+        <div class="flex items-center gap-5 mb-8">
+          @if (authService.currentUser()?.user_metadata?.['avatar_url']) {
+            <img [src]="authService.currentUser()?.user_metadata?.['avatar_url']" alt="Profile" class="w-20 h-20 rounded-full border border-gray-200 dark:border-gray-700 shadow-sm">
+          } @else {
+            <div class="w-20 h-20 rounded-full bg-gray-100 dark:bg-[#2C2C2E] flex items-center justify-center text-gray-400">
+              <mat-icon class="text-4xl w-10 h-10">person</mat-icon>
+            </div>
+          }
+          <div class="flex-1">
+            <h3 class="font-semibold text-xl tracking-tight text-gray-900 dark:text-white">{{ authService.currentUser()?.user_metadata?.['full_name'] || authService.currentUser()?.user_metadata?.['name'] || ('settings.guest' | translate) }}</h3>
+            <p class="text-sm text-gray-500">{{ authService.currentUser()?.email || ('settings.noAccount' | translate) }}</p>
+          </div>
+          <div class="relative group">
+            <div class="absolute -inset-1 bg-gradient-to-tr from-violet-500/30 to-fuchsia-500/30 rounded-2xl blur-lg opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <div class="relative bg-gray-50 dark:bg-[#1C1C1E] px-6 py-4 rounded-2xl border border-gray-200 dark:border-gray-800 flex items-center gap-4 transition-transform group-hover:scale-[1.02]">
+              <div class="w-10 h-10 rounded-full bg-white dark:bg-black shadow-inner flex items-center justify-center">
+                <mat-icon class="text-gray-900 dark:text-white text-[20px] w-[20px] h-[20px]">auto_awesome</mat-icon>
+              </div>
+              <div class="flex flex-col">
+                <span class="text-[9px] text-gray-500 font-black uppercase tracking-[0.15em] mb-1">{{ 'settings.generated' | translate }}</span>
+                <span class="text-3xl font-black text-gray-900 dark:text-white leading-none font-mono tracking-tighter">{{ formatCompactNumber(userProfile()?.generationCount || 0) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="flex gap-3">
+          <button (click)="confirmLogout()" class="flex-1 py-3.5 rounded-2xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 font-semibold hover:bg-red-100 dark:hover:bg-red-900/30 flex items-center justify-center gap-2 shadow-sm active:scale-[0.98]">
+            <mat-icon class="text-[20px] rtl:rotate-180">logout</mat-icon> {{ 'settings.logout' | translate }}
+          </button>
+        </div>
+
+    <!-- Account Deletion -->
+        <div class="mt-8 pt-8 border-t border-gray-100 dark:border-gray-800">
+          @if (isDeleting()) {
+            <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-5 text-center">
+              <mat-icon class="text-red-500 animate-spin mb-2">autorenew</mat-icon>
+              <p class="text-red-600 dark:text-red-400 font-semibold">{{ 'settings.account.deleting' | translate }}</p>
+              <p class="text-sm text-red-500 mt-1">{{ 'settings.account.deletingDesc' | translate }}</p>
+            </div>
+          } @else if (userProfile()?.scheduledDeletionDate) {
+            <div class="bg-gray-50 dark:bg-[#1C1C1E] border border-gray-200 dark:border-gray-800 rounded-2xl p-5 mb-4">
+              <div class="flex items-start gap-4">
+                <div class="bg-gray-200 dark:bg-[#2C2C2E] p-2 rounded-full">
+                  <mat-icon class="text-gray-600 dark:text-gray-400">warning</mat-icon>
+                </div>
+                <div>
+                  <h4 class="text-gray-900 dark:text-white font-semibold">{{ 'settings.account.scheduled' | translate }}</h4>
+                  <p class="text-gray-600 dark:text-gray-400 text-sm mt-1">
+                    {{ 'settings.account.scheduledDesc' | translate }} <span class="font-semibold">{{ userProfile()?.scheduledDeletionDate | date:'dd/MM/yyyy HH:mm' }}</span>.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <button (click)="cancelDeletion()" class="w-full py-3.5 rounded-2xl bg-black dark:bg-white text-white dark:text-black font-semibold hover:bg-gray-800 dark:hover:bg-gray-200 flex items-center justify-center gap-2 shadow-sm active:scale-[0.98]">
+              <mat-icon class="text-[20px]">cancel</mat-icon> {{ 'settings.account.cancelDelete' | translate }}
+            </button>
+          } @else {
+            <button (click)="confirmDeleteAccount()" class="w-full py-3.5 rounded-2xl bg-gray-100 dark:bg-[#2C2C2E] text-gray-600 dark:text-gray-400 font-semibold hover:bg-gray-200 dark:hover:bg-[#3C3C3E] flex items-center justify-center gap-2 shadow-sm active:scale-[0.98]">
+              <mat-icon class="text-[20px]">delete_forever</mat-icon> {{ 'settings.account.deleteAccount' | translate }}
+            </button>
+            <p class="text-center text-xs text-gray-500 mt-3">
+              {{ 'settings.account.deleteWarning' | translate }}
+            </p>
+          }
+        </div>
+      </div>
+
+      <!-- Preferences Section -->
+      <div class="bg-white dark:bg-[#111] border border-gray-200 dark:border-gray-800 rounded-3xl p-6 space-y-6 shadow-sm">
+        <h3 class="font-semibold text-lg tracking-tight">{{ 'settings.preferences' | translate }}</h3>
+        
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-4">
+            <div class="w-12 h-12 rounded-full bg-gray-100 dark:bg-[#2C2C2E] flex items-center justify-center">
+              <mat-icon class="text-gray-600 dark:text-gray-300">{{ themeService.isDarkMode() ? 'dark_mode' : 'light_mode' }}</mat-icon>
+            </div>
+            <div>
+              <p class="font-semibold text-gray-900 dark:text-white">{{ 'settings.darkMode' | translate }}</p>
+              <p class="text-sm text-gray-500">{{ 'settings.darkModeDesc' | translate }}</p>
+            </div>
+          </div>
+          <button (click)="themeService.toggleTheme()" class="relative inline-flex h-7 w-12 items-center rounded-full focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white focus:ring-offset-2 dark:focus:ring-offset-[#111]" [class.bg-black]="themeService.isDarkMode()" [class.dark:bg-white]="themeService.isDarkMode()" [class.bg-gray-200]="!themeService.isDarkMode()">
+            <span class="inline-block h-5 w-5 transform rounded-full bg-white dark:bg-black shadow-sm" [class.rtl:-translate-x-6]="themeService.isDarkMode()" [class.translate-x-6]="themeService.isDarkMode()" [class.translate-x-1]="!themeService.isDarkMode()"></span>
+          </button>
+        </div>
+
+        <div class="space-y-4">
+          <div class="flex items-center gap-4">
+            <div class="w-12 h-12 rounded-full bg-gray-100 dark:bg-[#2C2C2E] flex items-center justify-center">
+              <mat-icon class="text-gray-600 dark:text-gray-300">language</mat-icon>
+            </div>
+            <div>
+              <p class="font-semibold text-gray-900 dark:text-white">{{ 'settings.language' | translate }}</p>
+              <p class="text-sm text-gray-500">{{ 'settings.languageDesc' | translate }}</p>
+            </div>
+          </div>
+          
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            @for (lang of [
+              { id: 'fr', label: 'Français' },
+              { id: 'en', label: 'English' },
+              { id: 'zh', label: '中文' },
+              { id: 'ar', label: 'العربية' },
+              { id: 'es', label: 'Español' },
+              { id: 'pt', label: 'Português' }
+            ]; track lang.id) {
+              <button (click)="languageService.setLanguage($any(lang.id))"
+                      [class.bg-black]="languageService.currentLang() === lang.id"
+                      [class.dark:bg-white]="languageService.currentLang() === lang.id"
+                      [class.text-white]="languageService.currentLang() === lang.id"
+                      [class.dark:text-black]="languageService.currentLang() === lang.id"
+                      [class.border-black]="languageService.currentLang() === lang.id"
+                      [class.dark:border-white]="languageService.currentLang() === lang.id"
+                      [class.bg-gray-50]="languageService.currentLang() !== lang.id"
+                      [class.dark:bg-[#1C1C1E]]="languageService.currentLang() !== lang.id"
+                      [class.text-gray-600]="languageService.currentLang() !== lang.id"
+                      [class.dark:text-gray-400]="languageService.currentLang() !== lang.id"
+                      [class.border-gray-200]="languageService.currentLang() !== lang.id"
+                      [class.dark:border-gray-800]="languageService.currentLang() !== lang.id"
+                      class="py-3 px-4 rounded-2xl border text-sm font-bold transition-all hover:scale-[1.02] active:scale-95 shadow-sm">
+                {{ lang.label }}
+              </button>
+            }
+          </div>
+        </div>
+      </div>
+
+      <!-- Links Section -->
+      <div class="bg-white dark:bg-[#111] border border-gray-200 dark:border-gray-800 rounded-3xl p-2 shadow-sm">
+        @if (!authService.isAnonymous()) {
+          <button (click)="contactTeam()" class="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-[#1C1C1E] rounded-2xl group">
+            <div class="flex items-center gap-4">
+              <div class="w-8 h-8 rounded-full bg-[#25D366]/10 flex items-center justify-center group-hover:bg-[#25D366]/20">
+                <svg class="w-5 h-5 fill-[#25D366]" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+              </div>
+              <span class="font-medium text-gray-700 dark:text-gray-300">{{ 'settings.contact' | translate }}</span>
+            </div>
+            <mat-icon class="text-gray-400 rtl:rotate-180">chevron_right</mat-icon>
+          </button>
+        }
+        <button (click)="router.navigate(['/cgu'])" (keydown.enter)="router.navigate(['/cgu'])" tabindex="0" class="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-[#1C1C1E] rounded-2xl group">
+          <div class="flex items-center gap-4">
+            <div class="w-8 h-8 rounded-full bg-gray-100 dark:bg-[#2C2C2E] flex items-center justify-center group-hover:bg-white dark:group-hover:bg-[#111]">
+              <mat-icon class="text-gray-500 text-[20px] w-[20px] h-[20px]">description</mat-icon>
+            </div>
+            <span class="font-medium text-gray-700 dark:text-gray-300">{{ 'settings.cgu' | translate }}</span>
+          </div>
+          <mat-icon class="text-gray-400 rtl:rotate-180">chevron_right</mat-icon>
+        </button>
+        <button (click)="router.navigate(['/about'])" (keydown.enter)="router.navigate(['/about'])" tabindex="0" class="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-[#1C1C1E] rounded-2xl group">
+          <div class="flex items-center gap-4">
+            <div class="w-8 h-8 rounded-full bg-gray-100 dark:bg-[#2C2C2E] flex items-center justify-center group-hover:bg-white dark:group-hover:bg-[#111]">
+              <mat-icon class="text-gray-500 text-[20px] w-[20px] h-[20px]">info</mat-icon>
+            </div>
+            <span class="font-medium text-gray-700 dark:text-gray-300">{{ 'settings.about' | translate }}</span>
+          </div>
+          <mat-icon class="text-gray-400 rtl:rotate-180">chevron_right</mat-icon>
+        </button>
+      </div>
+    </div>
+
+    <!-- Logout Confirmation Modal -->
+    @if (showLogoutModal()) {
+      <div class="fixed inset-0 bg-black/40 dark:bg-black/80 backdrop-blur-md z-[60] flex items-center justify-center p-4 aria-reveal" (click)="cancelLogout()" (keydown.escape)="cancelLogout()" tabindex="-1">
+        <div class="bg-white/90 dark:bg-[#111]/90 backdrop-blur-2xl rounded-[2.5rem] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.3)] border border-white/20 dark:border-white/5 w-full max-w-sm p-8 text-center space-y-8 transition-all" (click)="$event.stopPropagation()" (keydown.enter)="$event.stopPropagation()" tabindex="0">
+          <div class="w-20 h-20 bg-red-500/10 dark:bg-red-500/20 rounded-full flex items-center justify-center mx-auto ring-8 ring-red-500/5">
+            <mat-icon class="text-red-600 dark:text-red-400 text-4xl w-10 h-10">logout</mat-icon>
+          </div>
+          <div>
+            <h3 class="text-2xl font-black tracking-tight mb-3 text-gray-900 dark:text-white">{{ 'settings.modal.logoutTitle' | translate }}</h3>
+            <p class="text-gray-500 dark:text-gray-400 font-medium px-4 leading-relaxed">{{ 'settings.modal.logoutDesc' | translate }}</p>
+          </div>
+          <div class="flex flex-col gap-3">
+            <button (click)="executeLogout()" class="w-full py-4 rounded-2xl font-black bg-red-600 text-white hover:bg-red-700 shadow-lg shadow-red-600/20 transition-all active:scale-95">{{ 'settings.logout' | translate }}</button>
+            <button (click)="cancelLogout()" class="w-full py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-all">{{ 'common.cancel' | translate }}</button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Delete Account Confirmation Modal -->
+    @if (showDeleteModal()) {
+      <div class="fixed inset-0 bg-black/40 dark:bg-black/80 backdrop-blur-md z-[60] flex items-center justify-center p-4 aria-reveal" (click)="cancelDeleteAccount()" (keydown.escape)="cancelDeleteAccount()" tabindex="-1">
+        <div class="bg-white/90 dark:bg-[#111]/90 backdrop-blur-2xl rounded-[2.5rem] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.3)] border border-white/20 dark:border-white/5 w-full max-w-sm p-8 text-center space-y-8 transition-all" (click)="$event.stopPropagation()" (keydown.enter)="$event.stopPropagation()" tabindex="0">
+          <div class="w-20 h-20 bg-gray-100 dark:bg-white/10 rounded-full flex items-center justify-center mx-auto ring-8 ring-gray-500/5">
+            <mat-icon class="text-gray-900 dark:text-white text-4xl w-10 h-10">delete_forever</mat-icon>
+          </div>
+          <div>
+            <h3 class="text-2xl font-black tracking-tight mb-3 text-gray-900 dark:text-white">{{ 'settings.modal.deleteTitle' | translate }}</h3>
+            <p class="text-gray-500 dark:text-gray-400 font-medium px-4 leading-relaxed">{{ 'settings.modal.deleteDesc' | translate }}</p>
+          </div>
+          <div class="flex flex-col gap-3">
+            <button (click)="executeDeleteAccount()" class="w-full py-4 rounded-2xl font-black bg-black dark:bg-white text-white dark:text-black shadow-xl transition-all active:scale-95">{{ 'common.confirm' | translate }}</button>
+            <button (click)="cancelDeleteAccount()" class="w-full py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-all">{{ 'common.cancel' | translate }}</button>
+          </div>
+        </div>
+      </div>
+    }
+  `
+})
+export class SettingsComponent implements OnInit, OnDestroy {
+  userProfile = signal<UserProfile | null>(null);
+  showLogoutModal = signal(false);
+  showDeleteModal = signal(false);
+  isDeleting = signal(false);
+  private unsubscribeProfile?: () => void;
+
+  public authService = inject(AuthService);
+  public themeService = inject(ThemeService);
+  private userService = inject(UserService);
+  public languageService = inject(LanguageService);
+  public router = inject(Router);
+
+  formatCompactNumber(num: number): string {
+    if (num >= 1000000) {
+      return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+    }
+    if (num >= 1000) {
+      return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+    }
+    return num.toString();
+  }
+
+  async ngOnInit() {
+    // Wait for auth — prevents getUserProfileSnapshot returning a no-op
+    // when the page is loaded directly (e.g. deep-link or hard refresh).
+    await this.authService.waitForAuthReady();
+
+    this.unsubscribeProfile = this.userService.getUserProfileSnapshot(async (data) => {
+      this.userProfile.set(data);
+
+      // Proactive cold deletion: if the scheduled date has passed on the frontend
+      // before the backend cron ran, trigger deletion immediately.
+      if (data?.scheduledDeletionDate) {
+        const deletionTime = new Date(data.scheduledDeletionDate).getTime();
+        const now = Date.now();
+        if (now >= deletionTime && !this.isDeleting()) {
+          this.isDeleting.set(true);
+          try {
+            await this.userService.deleteUserAccount();
+          } catch (e) {
+            console.error('Proactive deletion failed:', e);
+            this.isDeleting.set(false);
+          }
+        }
+      }
+    });
+  }
+
+  ngOnDestroy() {
+    this.unsubscribeProfile?.();
+  }
+  }
+
+  confirmLogout() {
+    this.showLogoutModal.set(true);
+  }
+
+  cancelLogout() {
+    this.showLogoutModal.set(false);
+  }
+
+  async executeLogout() {
+    this.showLogoutModal.set(false);
+    await this.authService.logout();
+    this.router.navigate(['/login']);
+  }
+
+  confirmDeleteAccount() {
+    this.showDeleteModal.set(true);
+  }
+
+  cancelDeleteAccount() {
+    this.showDeleteModal.set(false);
+  }
+
+  async executeDeleteAccount() {
+    this.showDeleteModal.set(false);
+    await this.userService.scheduleAccountDeletion();
+  }
+
+  async cancelDeletion() {
+    await this.userService.cancelAccountDeletion();
+  }
+
+  contactTeam() {
+    const message = encodeURIComponent("Bonjour l'équipe Aria OS, j'ai une question concernant l'application.");
+    window.open(`https://wa.me/24166171036?text=${message}`, '_blank');
+  }
+}
+
+18- Find ngOnInit in settings
+
+bash
+
+# Add ChangeDetectionStrategy to imports in settings
+sed -i "s/import { Component, OnInit, OnDestroy, signal, inject } from '@angular\/core';/import { Component, OnInit, OnDestroy, signal, inject, ChangeDetectionStrategy } from '@angular\/core';/" /tmp/aria_patched/src/app/components/settings/settings.component.ts
+
+# Add AuthService import
+sed -i "s/import { Router } from '@angular\/router';/import { Router } from '@angular\/router';\nimport { AuthService as _AuthServiceForWait } from '..\/..\/services\/auth.service';/" /tmp/aria_patched/src/app/components/settings/settings.component.ts
+
+# Better approach: patch the ngOnInit directly
+grep -n "ngOnInit\|unsubscribeProfile\|getUserProfileSnapshot" /tmp/aria_patched/src/app/components/settings/settings.component.ts | head -10
+Sortie
+
+233:  private unsubscribeProfile?: () => void;
+251:  ngOnInit() {
+252:    this.unsubscribeProfile = this.userService.getUserProfileSnapshot(async (data) => {
+273:    if (this.unsubscribeProfile) {
+274:      this.unsubscribeProfile();
+
+19- Add OnPush to settings component decorator
+
+import { Component, OnInit, OnDestroy, signal, inject, ChangeDetectionStrategy } from '@angular/core';
+import { AuthService } from '../../services/auth.service';
+import { ThemeService } from '../../services/theme.service';
+import { UserService, UserProfile } from '../../services/user.service';
+import { LanguageService } from '../../services/language.service';
+import { Router } from '@angular/router';
+import { AuthService as _AuthServiceForWait } from '../../services/auth.service';
+import { MatIconModule } from '@angular/material/icon';
+import { DatePipe } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { TranslatePipe } from '../../pipes/translate.pipe';
+
+@Component({
+  selector: 'app-settings',
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [MatIconModule, DatePipe, FormsModule, TranslatePipe],
+  template: `
+    <div class="p-4 max-w-3xl mx-auto space-y-8 pb-24">
+      <div class="space-y-1 px-2">
+        <h2 class="text-2xl font-semibold tracking-tight">{{ 'settings.title' | translate }}</h2>
+        <p class="text-base text-gray-500 dark:text-gray-400">{{ 'settings.desc' | translate }}</p>
+      </div>
+      
+      <!-- Profile Section -->
+      <div class="bg-white dark:bg-[#111] border border-gray-200 dark:border-gray-800 rounded-3xl p-6 shadow-sm">
+        <div class="flex items-center gap-5 mb-8">
+          @if (authService.currentUser()?.user_metadata?.['avatar_url']) {
+            <img [src]="authService.currentUser()?.user_metadata?.['avatar_url']" alt="Profile" class="w-20 h-20 rounded-full border border-gray-200 dark:border-gray-700 shadow-sm">
+          } @else {
+            <div class="w-20 h-20 rounded-full bg-gray-100 dark:bg-[#2C2C2E] flex items-center justify-center text-gray-400">
+              <mat-icon class="text-4xl w-10 h-10">person</mat-icon>
+            </div>
+          }
+          <div class="flex-1">
+            <h3 class="font-semibold text-xl tracking-tight text-gray-900 dark:text-white">{{ authService.currentUser()?.user_metadata?.['full_name'] || authService.currentUser()?.user_metadata?.['name'] || ('settings.guest' | translate) }}</h3>
+            <p class="text-sm text-gray-500">{{ authService.currentUser()?.email || ('settings.noAccount' | translate) }}</p>
+          </div>
+          <div class="relative group">
+            <div class="absolute -inset-1 bg-gradient-to-tr from-violet-500/30 to-fuchsia-500/30 rounded-2xl blur-lg opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <div class="relative bg-gray-50 dark:bg-[#1C1C1E] px-6 py-4 rounded-2xl border border-gray-200 dark:border-gray-800 flex items-center gap-4 transition-transform group-hover:scale-[1.02]">
+              <div class="w-10 h-10 rounded-full bg-white dark:bg-black shadow-inner flex items-center justify-center">
+                <mat-icon class="text-gray-900 dark:text-white text-[20px] w-[20px] h-[20px]">auto_awesome</mat-icon>
+              </div>
+              <div class="flex flex-col">
+                <span class="text-[9px] text-gray-500 font-black uppercase tracking-[0.15em] mb-1">{{ 'settings.generated' | translate }}</span>
+                <span class="text-3xl font-black text-gray-900 dark:text-white leading-none font-mono tracking-tighter">{{ formatCompactNumber(userProfile()?.generationCount || 0) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="flex gap-3">
+          <button (click)="confirmLogout()" class="flex-1 py-3.5 rounded-2xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 font-semibold hover:bg-red-100 dark:hover:bg-red-900/30 flex items-center justify-center gap-2 shadow-sm active:scale-[0.98]">
+            <mat-icon class="text-[20px] rtl:rotate-180">logout</mat-icon> {{ 'settings.logout' | translate }}
+          </button>
+        </div>
+
+    <!-- Account Deletion -->
+        <div class="mt-8 pt-8 border-t border-gray-100 dark:border-gray-800">
+          @if (isDeleting()) {
+            <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-5 text-center">
+              <mat-icon class="text-red-500 animate-spin mb-2">autorenew</mat-icon>
+              <p class="text-red-600 dark:text-red-400 font-semibold">{{ 'settings.account.deleting' | translate }}</p>
+              <p class="text-sm text-red-500 mt-1">{{ 'settings.account.deletingDesc' | translate }}</p>
+            </div>
+          } @else if (userProfile()?.scheduledDeletionDate) {
+            <div class="bg-gray-50 dark:bg-[#1C1C1E] border border-gray-200 dark:border-gray-800 rounded-2xl p-5 mb-4">
+              <div class="flex items-start gap-4">
+                <div class="bg-gray-200 dark:bg-[#2C2C2E] p-2 rounded-full">
+                  <mat-icon class="text-gray-600 dark:text-gray-400">warning</mat-icon>
+                </div>
+                <div>
+                  <h4 class="text-gray-900 dark:text-white font-semibold">{{ 'settings.account.scheduled' | translate }}</h4>
+                  <p class="text-gray-600 dark:text-gray-400 text-sm mt-1">
+                    {{ 'settings.account.scheduledDesc' | translate }} <span class="font-semibold">{{ userProfile()?.scheduledDeletionDate | date:'dd/MM/yyyy HH:mm' }}</span>.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <button (click)="cancelDeletion()" class="w-full py-3.5 rounded-2xl bg-black dark:bg-white text-white dark:text-black font-semibold hover:bg-gray-800 dark:hover:bg-gray-200 flex items-center justify-center gap-2 shadow-sm active:scale-[0.98]">
+              <mat-icon class="text-[20px]">cancel</mat-icon> {{ 'settings.account.cancelDelete' | translate }}
+            </button>
+          } @else {
+            <button (click)="confirmDeleteAccount()" class="w-full py-3.5 rounded-2xl bg-gray-100 dark:bg-[#2C2C2E] text-gray-600 dark:text-gray-400 font-semibold hover:bg-gray-200 dark:hover:bg-[#3C3C3E] flex items-center justify-center gap-2 shadow-sm active:scale-[0.98]">
+              <mat-icon class="text-[20px]">delete_forever</mat-icon> {{ 'settings.account.deleteAccount' | translate }}
+            </button>
+            <p class="text-center text-xs text-gray-500 mt-3">
+              {{ 'settings.account.deleteWarning' | translate }}
+            </p>
+          }
+        </div>
+      </div>
+
+      <!-- Preferences Section -->
+      <div class="bg-white dark:bg-[#111] border border-gray-200 dark:border-gray-800 rounded-3xl p-6 space-y-6 shadow-sm">
+        <h3 class="font-semibold text-lg tracking-tight">{{ 'settings.preferences' | translate }}</h3>
+        
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-4">
+            <div class="w-12 h-12 rounded-full bg-gray-100 dark:bg-[#2C2C2E] flex items-center justify-center">
+              <mat-icon class="text-gray-600 dark:text-gray-300">{{ themeService.isDarkMode() ? 'dark_mode' : 'light_mode' }}</mat-icon>
+            </div>
+            <div>
+              <p class="font-semibold text-gray-900 dark:text-white">{{ 'settings.darkMode' | translate }}</p>
+              <p class="text-sm text-gray-500">{{ 'settings.darkModeDesc' | translate }}</p>
+            </div>
+          </div>
+          <button (click)="themeService.toggleTheme()" class="relative inline-flex h-7 w-12 items-center rounded-full focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white focus:ring-offset-2 dark:focus:ring-offset-[#111]" [class.bg-black]="themeService.isDarkMode()" [class.dark:bg-white]="themeService.isDarkMode()" [class.bg-gray-200]="!themeService.isDarkMode()">
+            <span class="inline-block h-5 w-5 transform rounded-full bg-white dark:bg-black shadow-sm" [class.rtl:-translate-x-6]="themeService.isDarkMode()" [class.translate-x-6]="themeService.isDarkMode()" [class.translate-x-1]="!themeService.isDarkMode()"></span>
+          </button>
+        </div>
+
+        <div class="space-y-4">
+          <div class="flex items-center gap-4">
+            <div class="w-12 h-12 rounded-full bg-gray-100 dark:bg-[#2C2C2E] flex items-center justify-center">
+              <mat-icon class="text-gray-600 dark:text-gray-300">language</mat-icon>
+            </div>
+            <div>
+              <p class="font-semibold text-gray-900 dark:text-white">{{ 'settings.language' | translate }}</p>
+              <p class="text-sm text-gray-500">{{ 'settings.languageDesc' | translate }}</p>
+            </div>
+          </div>
+          
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            @for (lang of [
+              { id: 'fr', label: 'Français' },
+              { id: 'en', label: 'English' },
+              { id: 'zh', label: '中文' },
+              { id: 'ar', label: 'العربية' },
+              { id: 'es', label: 'Español' },
+              { id: 'pt', label: 'Português' }
+            ]; track lang.id) {
+              <button (click)="languageService.setLanguage($any(lang.id))"
+                      [class.bg-black]="languageService.currentLang() === lang.id"
+                      [class.dark:bg-white]="languageService.currentLang() === lang.id"
+                      [class.text-white]="languageService.currentLang() === lang.id"
+                      [class.dark:text-black]="languageService.currentLang() === lang.id"
+                      [class.border-black]="languageService.currentLang() === lang.id"
+                      [class.dark:border-white]="languageService.currentLang() === lang.id"
+                      [class.bg-gray-50]="languageService.currentLang() !== lang.id"
+                      [class.dark:bg-[#1C1C1E]]="languageService.currentLang() !== lang.id"
+                      [class.text-gray-600]="languageService.currentLang() !== lang.id"
+                      [class.dark:text-gray-400]="languageService.currentLang() !== lang.id"
+                      [class.border-gray-200]="languageService.currentLang() !== lang.id"
+                      [class.dark:border-gray-800]="languageService.currentLang() !== lang.id"
+                      class="py-3 px-4 rounded-2xl border text-sm font-bold transition-all hover:scale-[1.02] active:scale-95 shadow-sm">
+                {{ lang.label }}
+              </button>
+            }
+          </div>
+        </div>
+      </div>
+
+      <!-- Links Section -->
+      <div class="bg-white dark:bg-[#111] border border-gray-200 dark:border-gray-800 rounded-3xl p-2 shadow-sm">
+        @if (!authService.isAnonymous()) {
+          <button (click)="contactTeam()" class="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-[#1C1C1E] rounded-2xl group">
+            <div class="flex items-center gap-4">
+              <div class="w-8 h-8 rounded-full bg-[#25D366]/10 flex items-center justify-center group-hover:bg-[#25D366]/20">
+                <svg class="w-5 h-5 fill-[#25D366]" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+              </div>
+              <span class="font-medium text-gray-700 dark:text-gray-300">{{ 'settings.contact' | translate }}</span>
+            </div>
+            <mat-icon class="text-gray-400 rtl:rotate-180">chevron_right</mat-icon>
+          </button>
+        }
+        <button (click)="router.navigate(['/cgu'])" (keydown.enter)="router.navigate(['/cgu'])" tabindex="0" class="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-[#1C1C1E] rounded-2xl group">
+          <div class="flex items-center gap-4">
+            <div class="w-8 h-8 rounded-full bg-gray-100 dark:bg-[#2C2C2E] flex items-center justify-center group-hover:bg-white dark:group-hover:bg-[#111]">
+              <mat-icon class="text-gray-500 text-[20px] w-[20px] h-[20px]">description</mat-icon>
+            </div>
+            <span class="font-medium text-gray-700 dark:text-gray-300">{{ 'settings.cgu' | translate }}</span>
+          </div>
+          <mat-icon class="text-gray-400 rtl:rotate-180">chevron_right</mat-icon>
+        </button>
+        <button (click)="router.navigate(['/about'])" (keydown.enter)="router.navigate(['/about'])" tabindex="0" class="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-[#1C1C1E] rounded-2xl group">
+          <div class="flex items-center gap-4">
+            <div class="w-8 h-8 rounded-full bg-gray-100 dark:bg-[#2C2C2E] flex items-center justify-center group-hover:bg-white dark:group-hover:bg-[#111]">
+              <mat-icon class="text-gray-500 text-[20px] w-[20px] h-[20px]">info</mat-icon>
+            </div>
+            <span class="font-medium text-gray-700 dark:text-gray-300">{{ 'settings.about' | translate }}</span>
+          </div>
+          <mat-icon class="text-gray-400 rtl:rotate-180">chevron_right</mat-icon>
+        </button>
+      </div>
+    </div>
+
+    <!-- Logout Confirmation Modal -->
+    @if (showLogoutModal()) {
+      <div class="fixed inset-0 bg-black/40 dark:bg-black/80 backdrop-blur-md z-[60] flex items-center justify-center p-4 aria-reveal" (click)="cancelLogout()" (keydown.escape)="cancelLogout()" tabindex="-1">
+        <div class="bg-white/90 dark:bg-[#111]/90 backdrop-blur-2xl rounded-[2.5rem] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.3)] border border-white/20 dark:border-white/5 w-full max-w-sm p-8 text-center space-y-8 transition-all" (click)="$event.stopPropagation()" (keydown.enter)="$event.stopPropagation()" tabindex="0">
+          <div class="w-20 h-20 bg-red-500/10 dark:bg-red-500/20 rounded-full flex items-center justify-center mx-auto ring-8 ring-red-500/5">
+            <mat-icon class="text-red-600 dark:text-red-400 text-4xl w-10 h-10">logout</mat-icon>
+          </div>
+          <div>
+            <h3 class="text-2xl font-black tracking-tight mb-3 text-gray-900 dark:text-white">{{ 'settings.modal.logoutTitle' | translate }}</h3>
+            <p class="text-gray-500 dark:text-gray-400 font-medium px-4 leading-relaxed">{{ 'settings.modal.logoutDesc' | translate }}</p>
+          </div>
+          <div class="flex flex-col gap-3">
+            <button (click)="executeLogout()" class="w-full py-4 rounded-2xl font-black bg-red-600 text-white hover:bg-red-700 shadow-lg shadow-red-600/20 transition-all active:scale-95">{{ 'settings.logout' | translate }}</button>
+            <button (click)="cancelLogout()" class="w-full py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-all">{{ 'common.cancel' | translate }}</button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Delete Account Confirmation Modal -->
+    @if (showDeleteModal()) {
+      <div class="fixed inset-0 bg-black/40 dark:bg-black/80 backdrop-blur-md z-[60] flex items-center justify-center p-4 aria-reveal" (click)="cancelDeleteAccount()" (keydown.escape)="cancelDeleteAccount()" tabindex="-1">
+        <div class="bg-white/90 dark:bg-[#111]/90 backdrop-blur-2xl rounded-[2.5rem] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.3)] border border-white/20 dark:border-white/5 w-full max-w-sm p-8 text-center space-y-8 transition-all" (click)="$event.stopPropagation()" (keydown.enter)="$event.stopPropagation()" tabindex="0">
+          <div class="w-20 h-20 bg-gray-100 dark:bg-white/10 rounded-full flex items-center justify-center mx-auto ring-8 ring-gray-500/5">
+            <mat-icon class="text-gray-900 dark:text-white text-4xl w-10 h-10">delete_forever</mat-icon>
+          </div>
+          <div>
+            <h3 class="text-2xl font-black tracking-tight mb-3 text-gray-900 dark:text-white">{{ 'settings.modal.deleteTitle' | translate }}</h3>
+            <p class="text-gray-500 dark:text-gray-400 font-medium px-4 leading-relaxed">{{ 'settings.modal.deleteDesc' | translate }}</p>
+          </div>
+          <div class="flex flex-col gap-3">
+            <button (click)="executeDeleteAccount()" class="w-full py-4 rounded-2xl font-black bg-black dark:bg-white text-white dark:text-black shadow-xl transition-all active:scale-95">{{ 'common.confirm' | translate }}</button>
+            <button (click)="cancelDeleteAccount()" class="w-full py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-all">{{ 'common.cancel' | translate }}</button>
+          </div>
+        </div>
+      </div>
+    }
+  `
+})
+export class SettingsComponent implements OnInit, OnDestroy {
+  userProfile = signal<UserProfile | null>(null);
+  showLogoutModal = signal(false);
+  showDeleteModal = signal(false);
+  isDeleting = signal(false);
+  private unsubscribeProfile?: () => void;
+
+  public authService = inject(AuthService);
+  public themeService = inject(ThemeService);
+  private userService = inject(UserService);
+  public languageService = inject(LanguageService);
+  public router = inject(Router);
+
+  formatCompactNumber(num: number): string {
+    if (num >= 1000000) {
+      return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+    }
+    if (num >= 1000) {
+      return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+    }
+    return num.toString();
+  }
+
+  async ngOnInit() {
+    // Wait for auth — prevents getUserProfileSnapshot returning a no-op
+    // when the page is loaded directly (e.g. deep-link or hard refresh).
+    await this.authService.waitForAuthReady();
+
+    this.unsubscribeProfile = this.userService.getUserProfileSnapshot(async (data) => {
+      this.userProfile.set(data);
+
+      // Proactive cold deletion: if the scheduled date has passed on the frontend
+      // before the backend cron ran, trigger deletion immediately.
+      if (data?.scheduledDeletionDate) {
+        const deletionTime = new Date(data.scheduledDeletionDate).getTime();
+        const now = Date.now();
+        if (now >= deletionTime && !this.isDeleting()) {
+          this.isDeleting.set(true);
+          try {
+            await this.userService.deleteUserAccount();
+          } catch (e) {
+            console.error('Proactive deletion failed:', e);
+            this.isDeleting.set(false);
+          }
+        }
+      }
+    });
+  }
+
+  ngOnDestroy() {
+    this.unsubscribeProfile?.();
+  }
+  }
+
+  confirmLogout() {
+    this.showLogoutModal.set(true);
+  }
+
+  cancelLogout() {
+    this.showLogoutModal.set(false);
+  }
+
+  async executeLogout() {
+    this.showLogoutModal.set(false);
+    await this.authService.logout();
+    this.router.navigate(['/login']);
+  }
+
+  confirmDeleteAccount() {
+    this.showDeleteModal.set(true);
+  }
+
+  cancelDeleteAccount() {
+    this.showDeleteModal.set(false);
+  }
+
+  async executeDeleteAccount() {
+    this.showDeleteModal.set(false);
+    await this.userService.scheduleAccountDeletion();
+  }
+
+  async cancelDeletion() {
+    await this.userService.cancelAccountDeletion();
+  }
+
+  contactTeam() {
+    const message = encodeURIComponent("Bonjour l'équipe Aria OS, j'ai une question concernant l'application.");
+    window.open(`https://wa.me/24166171036?text=${message}`, '_blank');
+  }
+}
+
+20- Find ngOnInit in settings
+
+bash
+
+# Add ChangeDetectionStrategy to imports in settings
+sed -i "s/import { Component, OnInit, OnDestroy, signal, inject } from '@angular\/core';/import { Component, OnInit, OnDestroy, signal, inject, ChangeDetectionStrategy } from '@angular\/core';/" /tmp/aria_patched/src/app/components/settings/settings.component.ts
+
+# Add AuthService import
+sed -i "s/import { Router } from '@angular\/router';/import { Router } from '@angular\/router';\nimport { AuthService as _AuthServiceForWait } from '..\/..\/services\/auth.service';/" /tmp/aria_patched/src/app/components/settings/settings.component.ts
+
+# Better approach: patch the ngOnInit directly
+grep -n "ngOnInit\|unsubscribeProfile\|getUserProfileSnapshot" /tmp/aria_patched/src/app/components/settings/settings.component.ts | head -10
+Sortie
+
+233:  private unsubscribeProfile?: () => void;
+251:  ngOnInit() {
+252:    this.unsubscribeProfile = this.userService.getUserProfileSnapshot(async (data) => {
+273:    if (this.unsubscribeProfile) {
+274:      this.unsubscribeProfile();
+
+21- Read settings class body
+
+bash
+
+sed -n '228,275p' /tmp/aria_patched/src/app/components/settings/settings.component.ts
+Sortie
+
+export class SettingsComponent implements OnInit, OnDestroy {
+  userProfile = signal<UserProfile | null>(null);
+  showLogoutModal = signal(false);
+  showDeleteModal = signal(false);
+  isDeleting = signal(false);
+  private unsubscribeProfile?: () => void;
+
+  public authService = inject(AuthService);
+  public themeService = inject(ThemeService);
+  private userService = inject(UserService);
+  public languageService = inject(LanguageService);
+  public router = inject(Router);
+
+  formatCompactNumber(num: number): string {
+    if (num >= 1000000) {
+      return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+    }
+    if (num >= 1000) {
+      return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+    }
+    return num.toString();
+  }
+
+  ngOnInit() {
+    this.unsubscribeProfile = this.userService.getUserProfileSnapshot(async (data) => {
+      this.userProfile.set(data);
+      
+      // Proactive Cold Deletion logic on frontend if it wasn't caught by the backend yet
+      if (data?.scheduledDeletionDate) {
+         const deletionTime = new Date(data.scheduledDeletionDate).getTime();
+         const now = new Date().getTime();
+         if (now >= deletionTime && !this.isDeleting()) {
+             this.isDeleting.set(true);
+             try {
+                await this.userService.deleteUserAccount();
+             } catch (e) {
+                console.error("Proactive deletion failed:", e);
+                this.isDeleting.set(false); // Enable retry if failed
+             }
+         }
+      }
+    });
+  }
+
+  ngOnDestroy() {
+    if (this.unsubscribeProfile) {
+      this.unsubscribeProfile();
+    }
+
+22- Fix settings ngOnInit to be async with waitForAuthReady and cleaner unsubscribe
+
+import { Component, OnInit, OnDestroy, signal, inject, ChangeDetectionStrategy } from '@angular/core';
+import { AuthService } from '../../services/auth.service';
+import { ThemeService } from '../../services/theme.service';
+import { UserService, UserProfile } from '../../services/user.service';
+import { LanguageService } from '../../services/language.service';
+import { Router } from '@angular/router';
+import { AuthService as _AuthServiceForWait } from '../../services/auth.service';
+import { MatIconModule } from '@angular/material/icon';
+import { DatePipe } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { TranslatePipe } from '../../pipes/translate.pipe';
+
+@Component({
+  selector: 'app-settings',
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [MatIconModule, DatePipe, FormsModule, TranslatePipe],
+  template: `
+    <div class="p-4 max-w-3xl mx-auto space-y-8 pb-24">
+      <div class="space-y-1 px-2">
+        <h2 class="text-2xl font-semibold tracking-tight">{{ 'settings.title' | translate }}</h2>
+        <p class="text-base text-gray-500 dark:text-gray-400">{{ 'settings.desc' | translate }}</p>
+      </div>
+      
+      <!-- Profile Section -->
+      <div class="bg-white dark:bg-[#111] border border-gray-200 dark:border-gray-800 rounded-3xl p-6 shadow-sm">
+        <div class="flex items-center gap-5 mb-8">
+          @if (authService.currentUser()?.user_metadata?.['avatar_url']) {
+            <img [src]="authService.currentUser()?.user_metadata?.['avatar_url']" alt="Profile" class="w-20 h-20 rounded-full border border-gray-200 dark:border-gray-700 shadow-sm">
+          } @else {
+            <div class="w-20 h-20 rounded-full bg-gray-100 dark:bg-[#2C2C2E] flex items-center justify-center text-gray-400">
+              <mat-icon class="text-4xl w-10 h-10">person</mat-icon>
+            </div>
+          }
+          <div class="flex-1">
+            <h3 class="font-semibold text-xl tracking-tight text-gray-900 dark:text-white">{{ authService.currentUser()?.user_metadata?.['full_name'] || authService.currentUser()?.user_metadata?.['name'] || ('settings.guest' | translate) }}</h3>
+            <p class="text-sm text-gray-500">{{ authService.currentUser()?.email || ('settings.noAccount' | translate) }}</p>
+          </div>
+          <div class="relative group">
+            <div class="absolute -inset-1 bg-gradient-to-tr from-violet-500/30 to-fuchsia-500/30 rounded-2xl blur-lg opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <div class="relative bg-gray-50 dark:bg-[#1C1C1E] px-6 py-4 rounded-2xl border border-gray-200 dark:border-gray-800 flex items-center gap-4 transition-transform group-hover:scale-[1.02]">
+              <div class="w-10 h-10 rounded-full bg-white dark:bg-black shadow-inner flex items-center justify-center">
+                <mat-icon class="text-gray-900 dark:text-white text-[20px] w-[20px] h-[20px]">auto_awesome</mat-icon>
+              </div>
+              <div class="flex flex-col">
+                <span class="text-[9px] text-gray-500 font-black uppercase tracking-[0.15em] mb-1">{{ 'settings.generated' | translate }}</span>
+                <span class="text-3xl font-black text-gray-900 dark:text-white leading-none font-mono tracking-tighter">{{ formatCompactNumber(userProfile()?.generationCount || 0) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="flex gap-3">
+          <button (click)="confirmLogout()" class="flex-1 py-3.5 rounded-2xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 font-semibold hover:bg-red-100 dark:hover:bg-red-900/30 flex items-center justify-center gap-2 shadow-sm active:scale-[0.98]">
+            <mat-icon class="text-[20px] rtl:rotate-180">logout</mat-icon> {{ 'settings.logout' | translate }}
+          </button>
+        </div>
+
+    <!-- Account Deletion -->
+        <div class="mt-8 pt-8 border-t border-gray-100 dark:border-gray-800">
+          @if (isDeleting()) {
+            <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-5 text-center">
+              <mat-icon class="text-red-500 animate-spin mb-2">autorenew</mat-icon>
+              <p class="text-red-600 dark:text-red-400 font-semibold">{{ 'settings.account.deleting' | translate }}</p>
+              <p class="text-sm text-red-500 mt-1">{{ 'settings.account.deletingDesc' | translate }}</p>
+            </div>
+          } @else if (userProfile()?.scheduledDeletionDate) {
+            <div class="bg-gray-50 dark:bg-[#1C1C1E] border border-gray-200 dark:border-gray-800 rounded-2xl p-5 mb-4">
+              <div class="flex items-start gap-4">
+                <div class="bg-gray-200 dark:bg-[#2C2C2E] p-2 rounded-full">
+                  <mat-icon class="text-gray-600 dark:text-gray-400">warning</mat-icon>
+                </div>
+                <div>
+                  <h4 class="text-gray-900 dark:text-white font-semibold">{{ 'settings.account.scheduled' | translate }}</h4>
+                  <p class="text-gray-600 dark:text-gray-400 text-sm mt-1">
+                    {{ 'settings.account.scheduledDesc' | translate }} <span class="font-semibold">{{ userProfile()?.scheduledDeletionDate | date:'dd/MM/yyyy HH:mm' }}</span>.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <button (click)="cancelDeletion()" class="w-full py-3.5 rounded-2xl bg-black dark:bg-white text-white dark:text-black font-semibold hover:bg-gray-800 dark:hover:bg-gray-200 flex items-center justify-center gap-2 shadow-sm active:scale-[0.98]">
+              <mat-icon class="text-[20px]">cancel</mat-icon> {{ 'settings.account.cancelDelete' | translate }}
+            </button>
+          } @else {
+            <button (click)="confirmDeleteAccount()" class="w-full py-3.5 rounded-2xl bg-gray-100 dark:bg-[#2C2C2E] text-gray-600 dark:text-gray-400 font-semibold hover:bg-gray-200 dark:hover:bg-[#3C3C3E] flex items-center justify-center gap-2 shadow-sm active:scale-[0.98]">
+              <mat-icon class="text-[20px]">delete_forever</mat-icon> {{ 'settings.account.deleteAccount' | translate }}
+            </button>
+            <p class="text-center text-xs text-gray-500 mt-3">
+              {{ 'settings.account.deleteWarning' | translate }}
+            </p>
+          }
+        </div>
+      </div>
+
+      <!-- Preferences Section -->
+      <div class="bg-white dark:bg-[#111] border border-gray-200 dark:border-gray-800 rounded-3xl p-6 space-y-6 shadow-sm">
+        <h3 class="font-semibold text-lg tracking-tight">{{ 'settings.preferences' | translate }}</h3>
+        
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-4">
+            <div class="w-12 h-12 rounded-full bg-gray-100 dark:bg-[#2C2C2E] flex items-center justify-center">
+              <mat-icon class="text-gray-600 dark:text-gray-300">{{ themeService.isDarkMode() ? 'dark_mode' : 'light_mode' }}</mat-icon>
+            </div>
+            <div>
+              <p class="font-semibold text-gray-900 dark:text-white">{{ 'settings.darkMode' | translate }}</p>
+              <p class="text-sm text-gray-500">{{ 'settings.darkModeDesc' | translate }}</p>
+            </div>
+          </div>
+          <button (click)="themeService.toggleTheme()" class="relative inline-flex h-7 w-12 items-center rounded-full focus:outline-none focus:ring-2 focus:ring-black dark:focus:ring-white focus:ring-offset-2 dark:focus:ring-offset-[#111]" [class.bg-black]="themeService.isDarkMode()" [class.dark:bg-white]="themeService.isDarkMode()" [class.bg-gray-200]="!themeService.isDarkMode()">
+            <span class="inline-block h-5 w-5 transform rounded-full bg-white dark:bg-black shadow-sm" [class.rtl:-translate-x-6]="themeService.isDarkMode()" [class.translate-x-6]="themeService.isDarkMode()" [class.translate-x-1]="!themeService.isDarkMode()"></span>
+          </button>
+        </div>
+
+        <div class="space-y-4">
+          <div class="flex items-center gap-4">
+            <div class="w-12 h-12 rounded-full bg-gray-100 dark:bg-[#2C2C2E] flex items-center justify-center">
+              <mat-icon class="text-gray-600 dark:text-gray-300">language</mat-icon>
+            </div>
+            <div>
+              <p class="font-semibold text-gray-900 dark:text-white">{{ 'settings.language' | translate }}</p>
+              <p class="text-sm text-gray-500">{{ 'settings.languageDesc' | translate }}</p>
+            </div>
+          </div>
+          
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            @for (lang of [
+              { id: 'fr', label: 'Français' },
+              { id: 'en', label: 'English' },
+              { id: 'zh', label: '中文' },
+              { id: 'ar', label: 'العربية' },
+              { id: 'es', label: 'Español' },
+              { id: 'pt', label: 'Português' }
+            ]; track lang.id) {
+              <button (click)="languageService.setLanguage($any(lang.id))"
+                      [class.bg-black]="languageService.currentLang() === lang.id"
+                      [class.dark:bg-white]="languageService.currentLang() === lang.id"
+                      [class.text-white]="languageService.currentLang() === lang.id"
+                      [class.dark:text-black]="languageService.currentLang() === lang.id"
+                      [class.border-black]="languageService.currentLang() === lang.id"
+                      [class.dark:border-white]="languageService.currentLang() === lang.id"
+                      [class.bg-gray-50]="languageService.currentLang() !== lang.id"
+                      [class.dark:bg-[#1C1C1E]]="languageService.currentLang() !== lang.id"
+                      [class.text-gray-600]="languageService.currentLang() !== lang.id"
+                      [class.dark:text-gray-400]="languageService.currentLang() !== lang.id"
+                      [class.border-gray-200]="languageService.currentLang() !== lang.id"
+                      [class.dark:border-gray-800]="languageService.currentLang() !== lang.id"
+                      class="py-3 px-4 rounded-2xl border text-sm font-bold transition-all hover:scale-[1.02] active:scale-95 shadow-sm">
+                {{ lang.label }}
+              </button>
+            }
+          </div>
+        </div>
+      </div>
+
+      <!-- Links Section -->
+      <div class="bg-white dark:bg-[#111] border border-gray-200 dark:border-gray-800 rounded-3xl p-2 shadow-sm">
+        @if (!authService.isAnonymous()) {
+          <button (click)="contactTeam()" class="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-[#1C1C1E] rounded-2xl group">
+            <div class="flex items-center gap-4">
+              <div class="w-8 h-8 rounded-full bg-[#25D366]/10 flex items-center justify-center group-hover:bg-[#25D366]/20">
+                <svg class="w-5 h-5 fill-[#25D366]" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+              </div>
+              <span class="font-medium text-gray-700 dark:text-gray-300">{{ 'settings.contact' | translate }}</span>
+            </div>
+            <mat-icon class="text-gray-400 rtl:rotate-180">chevron_right</mat-icon>
+          </button>
+        }
+        <button (click)="router.navigate(['/cgu'])" (keydown.enter)="router.navigate(['/cgu'])" tabindex="0" class="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-[#1C1C1E] rounded-2xl group">
+          <div class="flex items-center gap-4">
+            <div class="w-8 h-8 rounded-full bg-gray-100 dark:bg-[#2C2C2E] flex items-center justify-center group-hover:bg-white dark:group-hover:bg-[#111]">
+              <mat-icon class="text-gray-500 text-[20px] w-[20px] h-[20px]">description</mat-icon>
+            </div>
+            <span class="font-medium text-gray-700 dark:text-gray-300">{{ 'settings.cgu' | translate }}</span>
+          </div>
+          <mat-icon class="text-gray-400 rtl:rotate-180">chevron_right</mat-icon>
+        </button>
+        <button (click)="router.navigate(['/about'])" (keydown.enter)="router.navigate(['/about'])" tabindex="0" class="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-[#1C1C1E] rounded-2xl group">
+          <div class="flex items-center gap-4">
+            <div class="w-8 h-8 rounded-full bg-gray-100 dark:bg-[#2C2C2E] flex items-center justify-center group-hover:bg-white dark:group-hover:bg-[#111]">
+              <mat-icon class="text-gray-500 text-[20px] w-[20px] h-[20px]">info</mat-icon>
+            </div>
+            <span class="font-medium text-gray-700 dark:text-gray-300">{{ 'settings.about' | translate }}</span>
+          </div>
+          <mat-icon class="text-gray-400 rtl:rotate-180">chevron_right</mat-icon>
+        </button>
+      </div>
+    </div>
+
+    <!-- Logout Confirmation Modal -->
+    @if (showLogoutModal()) {
+      <div class="fixed inset-0 bg-black/40 dark:bg-black/80 backdrop-blur-md z-[60] flex items-center justify-center p-4 aria-reveal" (click)="cancelLogout()" (keydown.escape)="cancelLogout()" tabindex="-1">
+        <div class="bg-white/90 dark:bg-[#111]/90 backdrop-blur-2xl rounded-[2.5rem] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.3)] border border-white/20 dark:border-white/5 w-full max-w-sm p-8 text-center space-y-8 transition-all" (click)="$event.stopPropagation()" (keydown.enter)="$event.stopPropagation()" tabindex="0">
+          <div class="w-20 h-20 bg-red-500/10 dark:bg-red-500/20 rounded-full flex items-center justify-center mx-auto ring-8 ring-red-500/5">
+            <mat-icon class="text-red-600 dark:text-red-400 text-4xl w-10 h-10">logout</mat-icon>
+          </div>
+          <div>
+            <h3 class="text-2xl font-black tracking-tight mb-3 text-gray-900 dark:text-white">{{ 'settings.modal.logoutTitle' | translate }}</h3>
+            <p class="text-gray-500 dark:text-gray-400 font-medium px-4 leading-relaxed">{{ 'settings.modal.logoutDesc' | translate }}</p>
+          </div>
+          <div class="flex flex-col gap-3">
+            <button (click)="executeLogout()" class="w-full py-4 rounded-2xl font-black bg-red-600 text-white hover:bg-red-700 shadow-lg shadow-red-600/20 transition-all active:scale-95">{{ 'settings.logout' | translate }}</button>
+            <button (click)="cancelLogout()" class="w-full py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-all">{{ 'common.cancel' | translate }}</button>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Delete Account Confirmation Modal -->
+    @if (showDeleteModal()) {
+      <div class="fixed inset-0 bg-black/40 dark:bg-black/80 backdrop-blur-md z-[60] flex items-center justify-center p-4 aria-reveal" (click)="cancelDeleteAccount()" (keydown.escape)="cancelDeleteAccount()" tabindex="-1">
+        <div class="bg-white/90 dark:bg-[#111]/90 backdrop-blur-2xl rounded-[2.5rem] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.3)] border border-white/20 dark:border-white/5 w-full max-w-sm p-8 text-center space-y-8 transition-all" (click)="$event.stopPropagation()" (keydown.enter)="$event.stopPropagation()" tabindex="0">
+          <div class="w-20 h-20 bg-gray-100 dark:bg-white/10 rounded-full flex items-center justify-center mx-auto ring-8 ring-gray-500/5">
+            <mat-icon class="text-gray-900 dark:text-white text-4xl w-10 h-10">delete_forever</mat-icon>
+          </div>
+          <div>
+            <h3 class="text-2xl font-black tracking-tight mb-3 text-gray-900 dark:text-white">{{ 'settings.modal.deleteTitle' | translate }}</h3>
+            <p class="text-gray-500 dark:text-gray-400 font-medium px-4 leading-relaxed">{{ 'settings.modal.deleteDesc' | translate }}</p>
+          </div>
+          <div class="flex flex-col gap-3">
+            <button (click)="executeDeleteAccount()" class="w-full py-4 rounded-2xl font-black bg-black dark:bg-white text-white dark:text-black shadow-xl transition-all active:scale-95">{{ 'common.confirm' | translate }}</button>
+            <button (click)="cancelDeleteAccount()" class="w-full py-4 rounded-2xl font-bold text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-all">{{ 'common.cancel' | translate }}</button>
+          </div>
+        </div>
+      </div>
+    }
+  `
+})
+export class SettingsComponent implements OnInit, OnDestroy {
+  userProfile = signal<UserProfile | null>(null);
+  showLogoutModal = signal(false);
+  showDeleteModal = signal(false);
+  isDeleting = signal(false);
+  private unsubscribeProfile?: () => void;
+
+  public authService = inject(AuthService);
+  public themeService = inject(ThemeService);
+  private userService = inject(UserService);
+  public languageService = inject(LanguageService);
+  public router = inject(Router);
+
+  formatCompactNumber(num: number): string {
+    if (num >= 1000000) {
+      return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+    }
+    if (num >= 1000) {
+      return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+    }
+    return num.toString();
+  }
+
+  async ngOnInit() {
+    // Wait for auth — prevents getUserProfileSnapshot returning a no-op
+    // when the page is loaded directly (e.g. deep-link or hard refresh).
+    await this.authService.waitForAuthReady();
+
+    this.unsubscribeProfile = this.userService.getUserProfileSnapshot(async (data) => {
+      this.userProfile.set(data);
+
+      // Proactive cold deletion: if the scheduled date has passed on the frontend
+      // before the backend cron ran, trigger deletion immediately.
+      if (data?.scheduledDeletionDate) {
+        const deletionTime = new Date(data.scheduledDeletionDate).getTime();
+        const now = Date.now();
+        if (now >= deletionTime && !this.isDeleting()) {
+          this.isDeleting.set(true);
+          try {
+            await this.userService.deleteUserAccount();
+          } catch (e) {
+            console.error('Proactive deletion failed:', e);
+            this.isDeleting.set(false);
+          }
+        }
+      }
+    });
+  }
+
+  ngOnDestroy() {
+    this.unsubscribeProfile?.();
+  }
+  }
+
+  confirmLogout() {
+    this.showLogoutModal.set(true);
+  }
+
+  cancelLogout() {
+    this.showLogoutModal.set(false);
+  }
+
+  async executeLogout() {
+    this.showLogoutModal.set(false);
+    await this.authService.logout();
+    this.router.navigate(['/login']);
+  }
+
+  confirmDeleteAccount() {
+    this.showDeleteModal.set(true);
+  }
+
+  cancelDeleteAccount() {
+    this.showDeleteModal.set(false);
+  }
+
+  async executeDeleteAccount() {
+    this.showDeleteModal.set(false);
+    await this.userService.scheduleAccountDeletion();
+  }
+
+  async cancelDeletion() {
+    await this.userService.cancelAccountDeletion();
+  }
+
+  contactTeam() {
+    const message = encodeURIComponent("Bonjour l'équipe Aria OS, j'ai une question concernant l'application.");
+    window.open(`https://wa.me/24166171036?text=${message}`, '_blank');
+  }
+}
+
+23- Check videos component ngOnInit
+
+bash
+
+# Fix videos component - same auth wait issue
+grep -n "ngOnInit\|async\|isLoading\|inject\|authService\|waitFor" /tmp/aria_project/ARIA-OS---1912-main/src/app/components/videos/videos.component.ts | head -20
+Sortie
+
+1:import { Component, OnInit, signal, computed, inject, ChangeDetectionStrategy } from '@angular/core';
+88:      @if (isLoading()) {
+144:  private videoService = inject(VideoService);
+145:  private toastService = inject(ToastService);
+146:  private hapticService = inject(HapticService);
+147:  private router = inject(Router);
+150:  isLoading = signal(true);
+186:  async ngOnInit() {
+190:  async loadVideos() {
+191:    this.isLoading.set(true);
+196:      this.isLoading.set(false);
+210:  async togglePin(video: SavedVideo) {
+222:  async moveToTrash(video: SavedVideo) {
+234:  async restoreVideo(video: SavedVideo) {
+246:  async permanentlyDelete(video: SavedVideo) {
+259:  async emptyTrash() {

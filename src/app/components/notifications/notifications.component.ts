@@ -1,7 +1,8 @@
-import { Component, OnInit, OnDestroy, signal, inject, computed } from '@angular/core';
+import { Component, OnInit, OnDestroy, signal, inject, computed, ChangeDetectionStrategy } from '@angular/core';
 import { NotificationService, AppNotification } from '../../services/notification.service';
 import { UserService, UserProfile } from '../../services/user.service';
 import { LanguageService } from '../../services/language.service';
+import { AuthService } from '../../services/auth.service';
 import { TranslatePipe } from '../../pipes/translate.pipe';
 import { MatIconModule } from '@angular/material/icon';
 import { DatePipe } from '@angular/common';
@@ -10,6 +11,7 @@ import { Router } from '@angular/router';
 @Component({
   selector: 'app-notifications',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [MatIconModule, DatePipe, TranslatePipe],
   template: `
     <div class="p-4 max-w-3xl mx-auto space-y-6 pb-24">
@@ -84,6 +86,7 @@ export class NotificationsComponent implements OnInit, OnDestroy {
   private notificationService = inject(NotificationService);
   private userService = inject(UserService);
   private languageService = inject(LanguageService);
+  private authService = inject(AuthService);
   private router = inject(Router);
 
   notifications = signal<AppNotification[]>([]);
@@ -98,22 +101,27 @@ export class NotificationsComponent implements OnInit, OnDestroy {
     return this.notifications().filter(n => !deleted.includes(n.id!));
   });
 
-  ngOnInit() {
+  async ngOnInit() {
+    // Wait for auth — avoids the empty-state flash when service returns early
+    await this.authService.waitForAuthReady();
+
+    let notificationsLoaded = false;
+    let profileLoaded = false;
+    const checkDone = () => {
+      if (notificationsLoaded && profileLoaded) this.loading.set(false);
+    };
+
     this.unsubNotifications = this.notificationService.getNotificationsSnapshot((data) => {
-      this.notifications.set(data);
-      this.checkLoading();
+      this.notifications.set(data || []);
+      notificationsLoaded = true;
+      checkDone();
     });
 
     this.unsubProfile = this.userService.getUserProfileSnapshot((data) => {
       this.userProfile.set(data);
-      this.checkLoading();
+      profileLoaded = true;
+      checkDone();
     });
-  }
-
-  checkLoading() {
-    if (this.notifications() !== undefined && this.userProfile() !== undefined) {
-      this.loading.set(false);
-    }
   }
 
   ngOnDestroy() {

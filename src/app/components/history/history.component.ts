@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 
 import { ScriptService, ScriptData } from '../../services/script.service';
+import { AuthService } from '../../services/auth.service';
 import { ToastService } from '../../services/toast.service';
 import { HapticService } from '../../services/haptic.service';
 import { LanguageService } from '../../services/language.service';
@@ -176,6 +177,7 @@ import { ScriptDetailsModalComponent } from './script-details-modal.component';
 })
 export class HistoryComponent implements OnInit, OnDestroy {
   private scriptService = inject(ScriptService);
+  private authService = inject(AuthService);
   private router = inject(Router);
   private toastService = inject(ToastService);
   private hapticService = inject(HapticService);
@@ -232,7 +234,11 @@ export class HistoryComponent implements OnInit, OnDestroy {
     return list;
   });
 
-  ngOnInit() {
+  async ngOnInit() {
+    // Await auth so scriptService.getScriptsSnapshot finds a valid user
+    // and does not return an empty no-op unsubscriber.
+    await this.authService.waitForAuthReady();
+
     this.unsubscribeActive = this.scriptService.getScriptsSnapshot((data) => {
       this.activeScripts.set(data);
       this.loading.set(false);

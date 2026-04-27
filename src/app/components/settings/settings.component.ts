@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, signal, inject } from '@angular/core';
+import { Component, OnInit, OnDestroy, signal, inject, ChangeDetectionStrategy } from '@angular/core';
 import { AuthService } from '../../services/auth.service';
 import { ThemeService } from '../../services/theme.service';
 import { UserService, UserProfile } from '../../services/user.service';
@@ -12,6 +12,7 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
 @Component({
   selector: 'app-settings',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [MatIconModule, DatePipe, FormsModule, TranslatePipe],
   template: `
     <div class="p-4 max-w-3xl mx-auto space-y-8 pb-24">
@@ -246,23 +247,28 @@ export class SettingsComponent implements OnInit, OnDestroy {
     return num.toString();
   }
 
-  ngOnInit() {
+  async ngOnInit() {
+    // Wait for auth — prevents getUserProfileSnapshot returning a no-op
+    // when the page is loaded directly (e.g. deep-link or hard refresh).
+    await this.authService.waitForAuthReady();
+
     this.unsubscribeProfile = this.userService.getUserProfileSnapshot(async (data) => {
       this.userProfile.set(data);
-      
-      // Proactive Cold Deletion logic on frontend if it wasn't caught by the backend yet
+
+      // Proactive cold deletion: if the scheduled date has passed on the frontend
+      // before the backend cron ran, trigger deletion immediately.
       if (data?.scheduledDeletionDate) {
-         const deletionTime = new Date(data.scheduledDeletionDate).getTime();
-         const now = new Date().getTime();
-         if (now >= deletionTime && !this.isDeleting()) {
-             this.isDeleting.set(true);
-             try {
-                await this.userService.deleteUserAccount();
-             } catch (e) {
-                console.error("Proactive deletion failed:", e);
-                this.isDeleting.set(false); // Enable retry if failed
-             }
-         }
+        const deletionTime = new Date(data.scheduledDeletionDate).getTime();
+        const now = Date.now();
+        if (now >= deletionTime && !this.isDeleting()) {
+          this.isDeleting.set(true);
+          try {
+            await this.userService.deleteUserAccount();
+          } catch (e) {
+            console.error('Proactive deletion failed:', e);
+            this.isDeleting.set(false);
+          }
+        }
       }
     });
   }

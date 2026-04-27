@@ -125,7 +125,12 @@ export class LayoutComponent implements OnInit, OnDestroy {
     return notifs.filter(n => !deleted.includes(n.id!) && !read.includes(n.id!)).length;
   });
 
-  ngOnInit() {
+  async ngOnInit() {
+    // ── Wait for auth before subscribing to user-gated services ──────────
+    // Without this, all three snapshot functions return early (no user yet)
+    // and the header badge / nav items never populate on first load.
+    await this.authService.waitForAuthReady();
+
     try {
       this.unsubscribeStats = this.statsService.getGlobalStatsSnapshot((total) => {
         this.totalGenerations.set(total || 0);
