@@ -29,6 +29,8 @@ export class GeminiService {
     onProgress?: (text: string) => void
   ): Promise<GenerateResult> {
     const user = this.auth.currentUser();
+    console.log('[GeminiService] User status at generation:', user ? `ID: ${user.id}` : 'NULL');
+    
     if (!user) {
       throw new Error('Vous devez être connecté pour générer un script.');
     }

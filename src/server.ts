@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import 'dotenv/config';
 import helmet from 'helmet';
 import cors from 'cors';
+// Triggering restart for .env changes
 
 import { apiRouter } from './server/api.router.js';
 

@@ -1,4 +1,4 @@
-import { Injectable, signal, inject } from '@angular/core';
+import { Injectable, signal, inject, ApplicationRef } from '@angular/core';
 import { Capacitor } from '@capacitor/core';
 import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
 import type { Session, User } from '@supabase/supabase-js';
@@ -9,6 +9,7 @@ import { LoggerService } from './logger.service';
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private logger = inject(LoggerService);
+  private appRef = inject(ApplicationRef);
 
   readonly currentUser = signal<User | null>(null);
   readonly currentSession = signal<Session | null>(null);
@@ -126,6 +127,7 @@ export class AuthService {
   }
 
   private applySession(session: Session | null): void {
+    console.log('[AuthService] Applying session:', session ? `User ${session.user.id}` : 'NULL');
     this.currentSession.set(session);
     this.currentUser.set(session?.user ?? null);
   }

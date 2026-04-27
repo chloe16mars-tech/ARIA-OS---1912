@@ -37,69 +37,63 @@ import { GenerationViewComponent } from './generation-view.component';
     GenerationViewComponent
   ],
   template: `
-    @if (isReady()) {
-      <div class="p-4 max-w-3xl mx-auto space-y-12 pb-32">
-        
-        <!-- Ad Carousel -->
-        <app-ad-carousel />
+    <div class="p-4 max-w-3xl mx-auto space-y-12 pb-32">
+      
+      <!-- Ad Carousel -->
+      <app-ad-carousel />
 
-        <!-- Step Indicator -->
-        <app-step-indicator [currentStep]="currentStep()" />
+      <!-- Step Indicator -->
+      <app-step-indicator [currentStep]="currentStep()" />
 
-        <!-- Step 1: Input -->
-        @if (currentStep() === 1) {
-          <app-source-input 
-            [url]="sourceUrl()"
-            [text]="sourceText()"
-            [error]="urlError()"
-            [isAnonymous]="isAnonymousUser()"
-            (urlChange)="sourceUrl.set($event)"
-            (textChange)="sourceText.set($event)"
-            (continue)="nextStep()"
-          />
-        }
+      <!-- Step 1: Input -->
+      @if (currentStep() === 1) {
+        <app-source-input 
+          [url]="sourceUrl()"
+          [text]="sourceText()"
+          [error]="urlError()"
+          [isAnonymous]="isAnonymousUser()"
+          (urlChange)="sourceUrl.set($event)"
+          (textChange)="sourceText.set($event)"
+          (continue)="nextStep()"
+        />
+      }
 
-        <!-- Step 2: Config -->
-        @if (currentStep() === 2) {
-          <app-script-config 
-            [intentions]="intentions"
-            [tones]="tones"
-            [stances]="stances"
-            [durations]="durations"
-            [selectedIntention]="selectedIntentionKey()"
-            [selectedTone]="selectedToneKey()"
-            [selectedStance]="selectedStanceKey()"
-            [selectedDuration]="selectedDurationKey()"
-            [isAnonymous]="isAnonymousUser()"
-            (intentionChange)="selectedIntentionKey.set($event)"
-            (toneChange)="selectedToneKey.set($event)"
-            (stanceChange)="selectedStanceKey.set($event)"
-            (durationChange)="selectedDurationKey.set($event)"
-            (generate)="generateScript()"
-          />
-        }
+      <!-- Step 2: Config -->
+      @if (currentStep() === 2) {
+        <app-script-config 
+          [intentions]="intentions"
+          [tones]="tones"
+          [stances]="stances"
+          [durations]="durations"
+          [selectedIntention]="selectedIntentionKey()"
+          [selectedTone]="selectedToneKey()"
+          [selectedStance]="selectedStanceKey()"
+          [selectedDuration]="selectedDurationKey()"
+          [isAnonymous]="isAnonymousUser()"
+          (intentionChange)="selectedIntentionKey.set($event)"
+          (toneChange)="selectedToneKey.set($event)"
+          (stanceChange)="selectedStanceKey.set($event)"
+          (durationChange)="selectedDurationKey.set($event)"
+          (generate)="generateScript()"
+        />
+      }
 
-        <!-- Step 3: Generation & Result -->
-        @if (currentStep() === 3) {
-          <app-generation-view 
-            [isGenerating]="isGenerating()"
-            [scriptContent]="scriptResult()"
-            (goToStudio)="openInStudio()"
-            (reset)="resetAll()"
-          />
-        }
+      <!-- Step 3: Generation & Result -->
+      @if (currentStep() === 3) {
+        <app-generation-view 
+          [isGenerating]="isGenerating()"
+          [scriptContent]="scriptResult()"
+          (goToStudio)="openInStudio()"
+          (reset)="resetAll()"
+        />
+      }
 
-        <!-- Bottom Marquee (Only on step 1) -->
-        @if (currentStep() === 1) {
-          <app-source-marquee />
-        }
-      </div>
-    } @else {
-      <!-- Simple loading state while signals stabilize -->
-      <div class="min-h-[60vh] flex items-center justify-center">
-        <div class="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    }
+      <!-- Bottom Marquee (Only on step 1) -->
+      @if (currentStep() === 1) {
+        <app-source-marquee />
+      }
+
+    </div>
   `,
   styles: [`
     :host { display: block; min-height: 100vh; background: transparent; }
@@ -122,7 +116,6 @@ export class HomeComponent implements OnInit, OnDestroy {
   sourceText = signal('');
   isGenerating = signal(false);
   scriptResult = signal('');
-  isReady = signal(false);
   
   // Config Options
   intentions = [
@@ -155,10 +148,10 @@ export class HomeComponent implements OnInit, OnDestroy {
   ];
 
   // Config Selections
-  selectedIntentionKey = signal<string | null>(null);
-  selectedToneKey = signal<string | null>(null);
-  selectedStanceKey = signal<string | null>(null);
-  selectedDurationKey = signal<string | null>(null);
+  selectedIntentionKey = signal<string | null>('home.intentions.sum');
+  selectedToneKey = signal<string | null>('home.tones.fact');
+  selectedStanceKey = signal<string | null>('home.stances.obj');
+  selectedDurationKey = signal<string | null>('home.durations.1m');
 
   isAnonymousUser = computed(() => this.authService.isAnonymous());
 
@@ -201,8 +194,6 @@ export class HomeComponent implements OnInit, OnDestroy {
   }
 
   async ngOnInit() {
-    await this.authService.waitForAuthReady();
-    
     if (!this.isAnonymousUser()) {
       this.unsubscribeProfile = this.userService.getUserProfileSnapshot(profile => {
         if (profile?.preferences && this.currentStep() < 3) {
@@ -214,10 +205,6 @@ export class HomeComponent implements OnInit, OnDestroy {
         }
       });
     }
-
-    // Force the view to render now that we are sure auth state is stable
-    this.isReady.set(true);
-    this.cdr.detectChanges();
   }
 
   ngOnDestroy() {
@@ -237,6 +224,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   nextStep() {
     this.hapticService.mediumImpact();
     this.currentStep.update(s => s + 1);
+    this.cdr.detectChanges();
   }
 
   async generateScript() {
@@ -244,10 +232,11 @@ export class HomeComponent implements OnInit, OnDestroy {
     this.currentStep.set(3);
     this.isGenerating.set(true);
     this.scriptResult.set('');
+    this.cdr.detectChanges();
 
     try {
       const intent = this.intentions.find(i => i.key === this.selectedIntentionKey())?.val || 'Résumer';
-      const tone = this.tones.find(t => t.key === this.selectedToneKey())?.val || 'Factuel';
+      const tone = this.tones.find(t => t.key === this.selectedToneKey())?.val || 'Factuel (Neutre)';
       const stance = this.stances.find(s => s.key === this.selectedStanceKey())?.val || 'Objectif';
       const duration = this.durations.find(d => d.key === this.selectedDurationKey())?.val || '1 min';
 
@@ -261,15 +250,20 @@ export class HomeComponent implements OnInit, OnDestroy {
         (chunk) => {
           if (!this.scriptResult()) this.hapticService.lightImpact();
           this.scriptResult.set(chunk);
+          this.cdr.detectChanges();
         }
       );
       this.hapticService.success();
-    } catch (e) {
+      this.cdr.detectChanges();
+    } catch (e: any) {
       this.hapticService.error();
-      this.toastService.error("Erreur lors de la génération. Veuillez réessayer.");
+      const msg = e?.message || "Erreur lors de la génération. Veuillez réessayer.";
+      this.toastService.show(msg, "error");
       this.currentStep.set(2);
+      this.cdr.detectChanges();
     } finally {
       this.isGenerating.set(false);
+      this.cdr.detectChanges();
     }
   }
 

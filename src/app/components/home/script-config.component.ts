@@ -85,6 +85,26 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
             </div>
           </div>
 
+          <!-- Stance (Parti pris) -->
+          <div class="space-y-6">
+            <div class="flex items-center gap-4">
+              <div class="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center border border-emerald-500/20">
+                <mat-icon>balance</mat-icon>
+              </div>
+              <h3 class="text-lg font-black text-gray-900 dark:text-white uppercase tracking-tight">{{ 'home.config.q3' | translate }}</h3>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              @for (s of stances; track s.key) {
+                <button (click)="selectStance(s.key)" 
+                        class="p-4 rounded-2xl text-[11px] font-black uppercase tracking-widest border transition-all"
+                        [class.bg-black]="selectedStance === s.key" [class.dark:bg-white]="selectedStance === s.key" [class.text-white]="selectedStance === s.key" [class.dark:text-black]="selectedStance === s.key"
+                        [class.bg-white]="selectedStance !== s.key" [class.dark:bg-[#1C1C1E]]="selectedStance !== s.key" [class.text-gray-500]="selectedStance !== s.key" [class.border-gray-100]="selectedStance !== s.key" [class.dark:border-white/5]="selectedStance !== s.key">
+                  {{ s.key | translate }}
+                </button>
+              }
+            </div>
+          </div>
+
           <!-- Duration -->
           <div class="space-y-6">
             <div class="flex items-center gap-4">
@@ -143,6 +163,10 @@ export class ScriptConfigComponent {
   selectTone(key: string) {
     if (this.isAnonymous && key !== 'home.tones.fact') return;
     this.toneChange.emit(key);
+  }
+
+  selectStance(key: string) {
+    this.stanceChange.emit(key);
   }
 
   selectDuration(key: string) {

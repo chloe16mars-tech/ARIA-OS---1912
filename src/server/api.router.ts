@@ -13,7 +13,7 @@ import { isSafePublicUrl } from './ssrf-guard.js';
 const supabaseUrl = process.env['SUPABASE_URL'];
 const supabaseServiceKey = process.env['SUPABASE_SERVICE_ROLE_KEY'];
 const geminiApiKey = process.env['GEMINI_API_KEY'];
-const geminiModel = process.env['GEMINI_MODEL'] ?? 'gemini-2.5-pro';
+const geminiModel = process.env['GEMINI_MODEL'] ?? 'gemini-3.1-pro-preview';
 
 if (!supabaseUrl || !supabaseServiceKey) {
   console.error(
@@ -135,9 +135,13 @@ apiRouter.post(
   '/generate-script',
   generateScriptLimiter,
   async (req: Request, res: Response): Promise<void> => {
+    console.log('[api] POST /generate-script - Request received');
     try {
       const user = await verifyJwt(req, res);
-      if (!user) return;
+      if (!user) {
+        console.warn('[api] verifyJwt failed');
+        return;
+      }
 
       const parsed = generateScriptSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -189,11 +193,12 @@ apiRouter.post(
       res.setHeader('X-Accel-Buffering', 'no');
       res.flushHeaders?.();
 
+      console.log(`[api] Generating with model: ${geminiModel}`);
       const ai = new GoogleGenAI({ apiKey: geminiApiKey });
       const stream = await ai.models.generateContentStream({
         model: geminiModel,
-        contents: prompt,
-        config: tools.length > 0 ? { tools } : undefined,
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        // config: tools.length > 0 ? { tools } : undefined,
       });
 
       for await (const chunk of stream) {
@@ -268,15 +273,10 @@ async function incrementStats(db: SupabaseClient, user: AuthedUser): Promise<voi
 
 function mapGeminiError(error: unknown): string {
   if (!(error instanceof Error)) {
-    return 'Erreur interne du serveur lors de la génération.';
+    return 'Erreur inconnue lors de la génération.';
   }
-  if (error.message.includes('429')) {
-    return "Quota dépassé sur le service d'Intelligence Artificielle. Réessayez dans quelques instants.";
-  }
-  if (error.message.includes('API key') || error.message.includes('400')) {
-    return "Clé d'API invalide ou requête incorrecte.";
-  }
-  return 'Erreur interne du serveur lors de la génération.';
+  console.error('[Gemini Detail]', error.message);
+  return `Erreur IA : ${error.message}`;
 }
 
 export type { SourceType };
