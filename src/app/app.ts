@@ -76,7 +76,8 @@ export class App implements OnInit {
   }
 
   private checkAccountDeletion() {
-    const unsubscribe = this.userService.getUserProfileSnapshot(async (profile) => {
+    let unsubscribe: (() => void) | undefined;
+    unsubscribe = this.userService.getUserProfileSnapshot(async (profile) => {
       if (profile && profile.scheduledDeletionDate) {
         const deletionDate = new Date(profile.scheduledDeletionDate);
         if (new Date() > deletionDate) {
@@ -88,7 +89,7 @@ export class App implements OnInit {
           }
         }
       }
-      unsubscribe(); // Only need to check once on load
+      if (unsubscribe) unsubscribe(); // Only need to check once on load
     });
   }
 }

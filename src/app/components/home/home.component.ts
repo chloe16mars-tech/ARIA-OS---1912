@@ -40,10 +40,10 @@ import { GenerationViewComponent } from './generation-view.component';
     <div class="p-4 max-w-3xl mx-auto space-y-12 pb-32">
       
       <!-- Ad Carousel -->
-      <app-ad-carousel />
+      <app-ad-carousel></app-ad-carousel>
 
       <!-- Step Indicator -->
-      <app-step-indicator [currentStep]="currentStep()" />
+      <app-step-indicator [currentStep]="currentStep()"></app-step-indicator>
 
       <!-- Step 1: Input -->
       @if (currentStep() === 1) {
@@ -57,7 +57,7 @@ import { GenerationViewComponent } from './generation-view.component';
           (textChange)="sourceText.set($event)"
           (activeTypeChange)="activeSourceType.set($event)"
           (continue)="nextStep()"
-        />
+        ></app-source-input>
       }
 
       <!-- Step 2: Config -->
@@ -77,7 +77,7 @@ import { GenerationViewComponent } from './generation-view.component';
           (stanceChange)="selectedStanceKey.set($event)"
           (durationChange)="selectedDurationKey.set($event)"
           (generate)="generateScript()"
-        />
+        ></app-script-config>
       }
 
       <!-- Step 3: Generation & Result -->
@@ -87,12 +87,12 @@ import { GenerationViewComponent } from './generation-view.component';
           [scriptContent]="scriptResult()"
           (goToStudio)="openInStudio()"
           (reset)="resetAll()"
-        />
+        ></app-generation-view>
       }
 
       <!-- Bottom Marquee (Only on step 1) -->
       @if (currentStep() === 1) {
-        <app-source-marquee />
+        <app-source-marquee></app-source-marquee>
       }
 
     </div>

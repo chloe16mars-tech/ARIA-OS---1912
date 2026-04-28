@@ -16,7 +16,7 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
   imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive, MatIconModule, ToastComponent, TranslatePipe],
   template: `
     <div class="min-h-screen flex flex-col bg-[#F9F9FB] dark:bg-[#0A0A0C] text-gray-900 dark:text-gray-100 relative">
-      <app-toast />
+      <app-toast></app-toast>
       
       <!-- Background Pattern -->
       <div class="fixed inset-0 pointer-events-none z-[-1] opacity-[0.03] bg-cakenews-pattern"></div>

@@ -8,6 +8,7 @@ import { VideoService } from '../../services/video.service';
 import { ToastService } from '../../services/toast.service';
 import { ScriptService, ScriptData } from '../../services/script.service';
 import { HapticService } from '../../services/haptic.service';
+import { LanguageService } from '../../services/language.service';
 
 import { CameraPreviewComponent } from './camera-preview.component';
 import { TeleprompterComponent } from './teleprompter.component';
@@ -152,6 +153,7 @@ export class StudioComponent implements OnInit, OnDestroy {
   private toastService = inject(ToastService);
   private scriptService = inject(ScriptService);
   private hapticService = inject(HapticService);
+  private languageService = inject(LanguageService);
   private ngZone = inject(NgZone);
 
   // UI State
@@ -246,7 +248,7 @@ export class StudioComponent implements OnInit, OnDestroy {
     this.hapticService.lightImpact();
     this.fullScriptContent.set(script.content);
     this.scriptContent.set(this.extractVoiceoverText(script.content));
-    this.scriptTitle.set("Script - " + script.intention);
+    this.scriptTitle.set(this.languageService.translate('studio.scripts.prefix') + " " + script.intention);
     this.isScriptSelectorOpen.set(false);
   }
 
@@ -280,7 +282,7 @@ export class StudioComponent implements OnInit, OnDestroy {
       this.mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
     } catch (err) {
       console.error("Error accessing camera:", err);
-      this.toastService.error("Impossible d'accéder à la caméra ou au microphone.");
+      this.toastService.error(this.languageService.translate('studio.toast.permissionError'));
       this.hapticService.error();
     }
   }
@@ -358,15 +360,18 @@ export class StudioComponent implements OnInit, OnDestroy {
     try {
       const blob = new Blob(this.recordedChunks, { type: this.recordingMode() === 'audio' ? 'audio/webm' : 'video/webm' });
       const duration = this.recordingTime();
-      const title = this.scriptTitle() !== 'Vidéo sans titre' ? this.scriptTitle() : 'Vidéo du ' + new Date().toLocaleDateString('fr-FR');
+      const untitled = this.languageService.translate('studio.video.untitled');
+      const datePrefix = this.languageService.translate('studio.video.datePrefix');
+      
+      const title = this.scriptTitle() !== untitled ? this.scriptTitle() : `${datePrefix} ${new Date().toLocaleDateString('fr-FR')}`;
       
       await this.videoService.saveVideo(blob, duration, title, this.fullScriptContent(), this.recordingMode() === 'audio' ? 'audio' : 'video');
       await this.hapticService.success();
-      this.toastService.success('Média enregistré avec succès');
+      this.toastService.success(this.languageService.translate('studio.toast.saveSuccess'));
       this.router.navigate(['/videos']);
     } catch (error) {
       this.hapticService.error();
-      this.toastService.error('Erreur lors de la sauvegarde');
+      this.toastService.error(this.languageService.translate('studio.toast.saveError'));
     } finally {
       this.isSaving.set(false);
     }

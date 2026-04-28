@@ -42,7 +42,7 @@ export interface Step {
               {{ step.id }}
             }
           </div>
-          <span class="text-[10px] font-black uppercase tracking-[0.2em] text-center"
+          <span class="text-[10px] font-bold text-center"
                 [class.text-black]="currentStep >= step.id"
                 [class.dark:text-white]="currentStep >= step.id"
                 [class.text-gray-400]="currentStep < step.id">

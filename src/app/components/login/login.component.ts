@@ -51,6 +51,11 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
               {{ 'login.google' | translate }}
             }
           </button>
+
+          <button (click)="loginAnonymously()" class="w-full relative flex items-center justify-center gap-3 bg-white dark:bg-[#2C2C2E] border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-[#3C3C3E] text-gray-900 dark:text-white font-semibold py-4 px-4 rounded-2xl shadow-sm active:scale-[0.98]">
+            <mat-icon>person_outline</mat-icon>
+            {{ 'login.anonymous' | translate }}
+          </button>
         </div>
         
         <p class="text-center text-xs text-gray-500 mt-8 font-medium">
@@ -162,6 +167,16 @@ export class LoginComponent {
         }
       }
       this.isLoadingGoogle.set(false);
+    }
+  }
+
+  async loginAnonymously() {
+    try {
+      await this.authService.loginAnonymously();
+      this.router.navigate(['/']);
+    } catch (error) {
+      console.error('Anonymous login error', error);
+      this.errorMessage.set("⚠️ Impossible de se connecter en mode invité.");
     }
   }
 }
