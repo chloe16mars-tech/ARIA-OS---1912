@@ -1,5 +1,6 @@
 import { Component, signal, inject } from '@angular/core';
 import { AuthService } from '../../services/auth.service';
+import { UserService } from '../../services/user.service';
 import { Router } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { CguComponent } from '../cgu/cgu.component';
@@ -79,14 +80,27 @@ export class LoginComponent {
   showCgu = signal(false);
 
   private authService = inject(AuthService);
+  private userService = inject(UserService);
   private router = inject(Router);
 
   constructor() {
     // If the user is already logged in, send them home immediately
-    this.authService.waitForAuthReady().then(() => {
-      if (this.authService.currentUser()) {
-        console.log('[LoginComponent] User already logged in, redirecting to home...');
-        this.router.navigate(['/']);
+    this.authService.waitForAuthReady().then(async () => {
+      const user = this.authService.currentUser();
+      if (user) {
+        // Wait for profile to load
+        let attempts = 0;
+        while (!this.authService.currentUserProfile() && attempts < 10) {
+          await new Promise(r => setTimeout(r, 200));
+          attempts++;
+        }
+
+        const profile = this.authService.currentUserProfile();
+        if (profile?.isAdmin) {
+          this.router.navigate(['/admin']);
+        } else {
+          this.router.navigate(['/']);
+        }
       }
     });
   }
@@ -98,11 +112,32 @@ export class LoginComponent {
     this.isLoadingGoogle.set(true);
     try {
       await this.authService.loginWithGoogle();
-      this.router.navigate(['/']);
+      
+      // Wait for auth to be fully ready and session applied
+      await this.authService.waitForAuthReady();
+      const user = this.authService.currentUser();
+      
+      if (user) {
+        // Wait for profile to load
+        let attempts = 0;
+        while (!this.authService.currentUserProfile() && attempts < 10) {
+          await new Promise(r => setTimeout(r, 200));
+          attempts++;
+        }
+
+        const profile = this.authService.currentUserProfile();
+        if (profile?.isAdmin) {
+          this.router.navigate(['/admin']);
+        } else {
+          this.router.navigate(['/']);
+        }
+      } else {
+        this.router.navigate(['/']);
+      }
     } catch (error) {
       console.error('Login error', error);
       
-        const err = Object(error);
+      const err = Object(error);
       const isNative = Capacitor.isNativePlatform();
       
       // Determine error code correctly depending on whether it's a native plugin error or Firebase web error

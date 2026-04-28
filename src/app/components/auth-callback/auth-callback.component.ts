@@ -1,5 +1,8 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { TranslatePipe } from '../../pipes/translate.pipe';
+import { AuthService } from '../../services/auth.service';
+import { UserService } from '../../services/user.service';
+import { Router } from '@angular/router';
 
 @Component({
   selector: 'app-auth-callback',
@@ -15,21 +18,30 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
   `
 })
 export class AuthCallbackComponent implements OnInit {
+  private authService = inject(AuthService);
+  private userService = inject(UserService);
+  private router = inject(Router);
+
   async ngOnInit() {
-    // Supabase will automatically handle the fragment in the URL
-    // and store the session in local storage.
-    
-    // We wait a bit to ensure the session is processed
-    setTimeout(() => {
-      if (window.opener) {
-        // Send a message to the parent window if needed
-        window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS' }, '*');
-        // Close the popup
-        window.close();
-      } else {
-        // If not in a popup, redirect to home
-        window.location.href = '/';
+    await this.authService.waitForAuthReady();
+    const user = this.authService.currentUser();
+
+    if (user) {
+      // Wait for profile to load (max 2 seconds)
+      let attempts = 0;
+      while (!this.authService.currentUserProfile() && attempts < 10) {
+        await new Promise(r => setTimeout(r, 200));
+        attempts++;
       }
-    }, 1500);
+
+      const profile = this.authService.currentUserProfile();
+      if (profile?.isAdmin) {
+        this.router.navigate(['/admin']);
+      } else {
+        this.router.navigate(['/']);
+      }
+    } else {
+      this.router.navigate(['/']);
+    }
   }
 }

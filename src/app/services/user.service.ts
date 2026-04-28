@@ -21,6 +21,7 @@ export interface UserProfile {
   preferences?: UserPreferences;
   readNotifications?: string[];
   deletedNotifications?: string[];
+  isAdmin?: boolean;
 }
 
 @Injectable({
@@ -41,7 +42,8 @@ export class UserService {
       scheduledDeletionDate: row['scheduled_deletion_date'] ? new Date(row['scheduled_deletion_date'] as string) : undefined,
       preferences: row['preferences'] as UserPreferences | undefined,
       readNotifications: (row['read_notifications'] as string[]) || [],
-      deletedNotifications: (row['deleted_notifications'] as string[]) || []
+      deletedNotifications: (row['deleted_notifications'] as string[]) || [],
+      isAdmin: row['is_admin'] as boolean | undefined
     };
   }
 
@@ -82,6 +84,22 @@ export class UserService {
     return () => {
       supabase.removeChannel(channel);
     };
+  }
+
+  async getProfile(userId: string): Promise<UserProfile | null> {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    if (error) {
+      if (error.code !== 'PGRST116') {
+        console.error('[UserService] Error fetching profile:', error);
+      }
+      return null;
+    }
+    return data ? this.mapFromDb(data) : null;
   }
 
   async saveUserPreferences(preferences: UserPreferences) {

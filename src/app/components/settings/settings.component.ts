@@ -182,6 +182,23 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
           </div>
           <mat-icon class="text-gray-400 rtl:rotate-180">chevron_right</mat-icon>
         </button>
+
+        @if (userProfile()?.isAdmin) {
+          <div class="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
+            <button (click)="router.navigate(['/admin'])" class="w-full flex items-center justify-between p-4 bg-violet-50 dark:bg-violet-900/10 hover:bg-violet-100 dark:hover:bg-violet-900/20 rounded-2xl group transition-all">
+              <div class="flex items-center gap-4">
+                <div class="w-10 h-10 rounded-full bg-violet-600 flex items-center justify-center shadow-lg shadow-violet-500/30 group-hover:scale-110 transition-transform">
+                  <mat-icon class="text-white text-[20px] w-[20px] h-[20px]">admin_panel_settings</mat-icon>
+                </div>
+                <div>
+                  <span class="font-bold text-violet-700 dark:text-violet-300 block">Admin Dashboard</span>
+                  <span class="text-[10px] text-violet-500/70 uppercase font-black tracking-widest">Control Panel</span>
+                </div>
+              </div>
+              <mat-icon class="text-violet-400 rtl:rotate-180">chevron_right</mat-icon>
+            </button>
+          </div>
+        }
       </div>
     </div>
 

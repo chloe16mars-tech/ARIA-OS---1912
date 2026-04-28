@@ -1,8 +1,10 @@
-import { Component, inject, signal, input, output } from '@angular/core';
+import { Component, inject, signal, input, output, computed, effect } from '@angular/core';
 import { Location } from '@angular/common';
 import { Router } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { TranslatePipe } from '../../pipes/translate.pipe';
+import { AppConfigService } from '../../services/app-config.service';
+import { LanguageService } from '../../services/language.service';
 
 @Component({
   selector: 'app-cgu',
@@ -54,16 +56,12 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
       
       <div class="flex-1 overflow-y-auto prose dark:prose-invert max-w-none text-sm leading-relaxed text-gray-700 dark:text-gray-300 space-y-6 bg-white dark:bg-[#111] p-6 sm:p-8 rounded-3xl border border-gray-200 dark:border-gray-800 shadow-sm relative">
         
-        @if (activeTab() === 'cgu') {
-          <div [innerHTML]="'legal.cgu.text' | translate"></div>
-        }
-
-        @if (activeTab() === 'legal') {
-          <div [innerHTML]="'legal.mentions.text' | translate"></div>
-        }
-
-        @if (activeTab() === 'privacy') {
-          <div [innerHTML]="'legal.privacy.text' | translate"></div>
+        @if (isLoading()) {
+          <div class="flex items-center justify-center py-20">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-600"></div>
+          </div>
+        } @else {
+          <div [innerHTML]="dynamicContent() || (fallbackKey() | translate)"></div>
         }
       </div>
     </div>
@@ -82,6 +80,40 @@ export class CguComponent {
   public location = inject(Location);
   public router = inject(Router);
   public activeTab = signal<'cgu' | 'legal' | 'privacy'>('cgu');
+  private appConfigService = inject(AppConfigService);
+  private langService = inject(LanguageService);
+  
+  dynamicContent = signal<string | null>(null);
+  isLoading = signal(false);
+
+  fallbackKey = computed(() => {
+    const tab = this.activeTab();
+    if (tab === 'cgu') return 'legal.cgu.text';
+    if (tab === 'legal') return 'legal.mentions.text';
+    return 'legal.privacy.text';
+  });
+
+  constructor() {
+    effect(() => {
+      this.loadDynamicContent(this.activeTab());
+    });
+  }
+
+  async loadDynamicContent(tab: string) {
+    this.isLoading.set(true);
+    try {
+      const data = await this.appConfigService.getLegalContent(tab === 'legal' ? 'mentions' : tab);
+      if (data && data.content_html) {
+        this.dynamicContent.set(data.content_html);
+      } else {
+        this.dynamicContent.set(null);
+      }
+    } catch (e) {
+      this.dynamicContent.set(null);
+    } finally {
+      this.isLoading.set(false);
+    }
+  }
   
   isPopup = input<boolean>(false);
   closePopup = output<void>();

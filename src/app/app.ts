@@ -3,6 +3,8 @@ import {RouterOutlet, Router} from '@angular/router';
 import {ThemeService} from './services/theme.service';
 import {AuthService} from './services/auth.service';
 import {UserService} from './services/user.service';
+import {AppConfigService} from './services/app-config.service';
+import {SpecialPopupComponent} from './components/ui/special-popup.component';
 import { Capacitor } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { SplashScreen } from '@capacitor/splash-screen';
@@ -10,7 +12,7 @@ import { SplashScreen } from '@capacitor/splash-screen';
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-root',
-  imports: [RouterOutlet],
+  imports: [RouterOutlet, SpecialPopupComponent],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
@@ -18,6 +20,7 @@ export class App implements OnInit {
   private themeService = inject(ThemeService);
   private authService = inject(AuthService);
   private userService = inject(UserService);
+  private appConfigService = inject(AppConfigService);
   private router = inject(Router);
 
   constructor() {
@@ -61,12 +64,15 @@ export class App implements OnInit {
         await StatusBar.setStyle({ style: Style.Dark });
         if (Capacitor.getPlatform() === 'android') {
           await StatusBar.setBackgroundColor({ color: '#0A0A0C' });
-          await StatusBar.setOverlaysWebView({ overlay: false }); // Ensure it pushes content down gracefully
+          await StatusBar.setOverlaysWebView({ overlay: false });
         }
       } catch (e) {
         console.warn('Status bar not available', e);
       }
     }
+    
+    // Initialize Global App Configuration
+    await this.appConfigService.initialize();
   }
 
   private checkAccountDeletion() {
