@@ -69,11 +69,11 @@ type AdminSection = 'ads' | 'config' | 'legal';
       <main class="flex-1 p-4 md:p-10 overflow-y-auto">
         <div class="max-w-5xl mx-auto">
           @if (currentSection() === 'ads') {
-            <app-admin-ads />
+            <app-admin-ads></app-admin-ads>
           } @else if (currentSection() === 'config') {
-            <app-admin-config />
+            <app-admin-config></app-admin-config>
           } @else if (currentSection() === 'legal') {
-            <app-admin-legal />
+            <app-admin-legal></app-admin-legal>
           }
         </div>
       </main>

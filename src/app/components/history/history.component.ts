@@ -117,7 +117,7 @@ import { ScriptDetailsModalComponent } from './script-details-modal.component';
               (delete)="confirmDelete(script)"
               (restore)="restoreScript(script)"
               (hardDelete)="confirmHardDelete(script)"
-            />
+            ></app-script-card>
           }
         </div>
       }
@@ -130,7 +130,7 @@ import { ScriptDetailsModalComponent } from './script-details-modal.component';
         (close)="closeScript()"
         (edit)="editScript(selectedScript()!)"
         (goToStudio)="goToStudio(selectedScript()!)"
-      />
+      ></app-script-details-modal>
     }
 
     <!-- Soft Delete Confirm -->

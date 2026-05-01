@@ -55,13 +55,13 @@ CREATE POLICY "App config is manageable by admins" ON public.app_config FOR ALL 
     EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND is_admin = true)
 );
 
--- Seed initial data for legal content if empty
-INSERT INTO public.legal_content (id, title_key, content_html)
-VALUES 
-('cgu', 'legal.tabs.cgu', '<h1>Conditions Générales d''Utilisation</h1><p>Contenu par défaut...</p>'),
-('privacy', 'legal.tabs.privacy', '<h1>Politique de Confidentialité</h1><p>Contenu par défaut...</p>'),
-('mentions', 'legal.tabs.mentions', '<h1>Mentions Légales</h1><p>Contenu par défaut...</p>')
-ON CONFLICT (id) DO NOTHING;
+-- Seed initial data for legal content if empty (kept as comments or omitted to prefer local translations)
+-- INSERT INTO public.legal_content (id, title_key, content_html)
+-- VALUES 
+-- ('cgu', 'legal.tabs.cgu', '<h1>Conditions Générales d''Utilisation</h1><p>Contenu par défaut...</p>'),
+-- ('privacy', 'legal.tabs.privacy', '<h1>Politique de Confidentialité</h1><p>Contenu par défaut...</p>'),
+-- ('mentions', 'legal.tabs.mentions', '<h1>Mentions Légales</h1><p>Contenu par défaut...</p>')
+-- ON CONFLICT (id) DO NOTHING;
 
 -- Seed initial data for app_config (languages and popup)
 INSERT INTO public.app_config (key, value)

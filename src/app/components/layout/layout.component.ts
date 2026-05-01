@@ -81,7 +81,7 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
           </a>
           <a routerLink="/settings" routerLinkActive="text-black dark:text-white bg-gray-100 dark:bg-[#2C2C2E]" class="flex flex-col items-center justify-center rounded-2xl text-gray-400 dark:text-gray-500 hover:text-gray-900 dark:hover:text-gray-100 w-[64px] h-[64px] sm:w-[72px] sm:h-[72px]">
             <mat-icon class="text-2xl">person</mat-icon>
-            <span class="text-[10px] mt-1 font-medium truncate w-full text-center px-1">{{ 'layout.me' | translate }}</span>
+            <span class="text-[10px] mt-1 font-medium truncate w-full text-center px-1">{{ 'layout.account' | translate }}</span>
           </a>
         </nav>
       </div>

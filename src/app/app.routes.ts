@@ -11,27 +11,25 @@ const authGuard = async () => {
   
   await authService.waitForAuthReady();
 
+  const targetUrl = router.getCurrentNavigation()?.extractedUrl.toString() || '/';
+  const publicRoutes = ['/cgu', '/about', '/login', '/auth/callback'];
+  if (publicRoutes.some(r => targetUrl.startsWith(r))) {
+    return true;
+  }
+
   if (!authService.currentUser()) {
     return router.parseUrl('/login');
   }
 
-  // Wait for profile to load (max 2 seconds)
+  // Wait for profile (max 1s for better UX)
   let attempts = 0;
-  while (!authService.currentUserProfile() && attempts < 10) {
+  while (!authService.currentUserProfile() && attempts < 5) {
     await new Promise(r => setTimeout(r, 200));
     attempts++;
   }
 
-  // Rigorous check: if user is admin and landing on root, redirect to admin dashboard
   const profile = authService.currentUserProfile();
   if (profile?.isAdmin) {
-    // Check if we are navigating to the root. 
-    // In a guard, we can check the current navigation or the proposed URL.
-    // However, since this guard is on the parent route '', it runs for all children.
-    // We only want to redirect if the target is exactly the root.
-    const nav = router.getCurrentNavigation();
-    const targetUrl = nav?.extractedUrl.toString() || '/';
-    
     if (targetUrl === '/' || targetUrl === '/login' || targetUrl === '/auth/callback') {
       return router.parseUrl('/admin');
     }
@@ -63,6 +61,8 @@ export const routes: Routes = [
       }
     ]
   },
+  { path: 'cgu', loadComponent: () => import('./components/cgu/cgu.component').then(m => m.CguComponent) },
+  { path: 'about', loadComponent: () => import('./components/about/about.component').then(m => m.AboutComponent) },
   {
     path: '**',
     loadComponent: () =>

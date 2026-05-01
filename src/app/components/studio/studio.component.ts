@@ -60,7 +60,7 @@ import { StudioSettingsComponent } from './studio-settings.component';
           [hasPermission]="hasCameraPermission()"
           [isRecording]="isRecording()"
           (onRequestPermission)="requestPermissions()"
-        />
+        ></app-camera-preview>
 
         <!-- 2. Dark Mask for better text reading -->
         @if (!recordedVideoUrl()) {
@@ -76,7 +76,7 @@ import { StudioSettingsComponent } from './studio-settings.component';
             [fontSize]="fontSize()"
             [opacity]="0.9"
             (scrollEnded)="onRecordingAutoStop()"
-          />
+          ></app-teleprompter>
         }
 
         <!-- 4. Playback for recorded media -->
@@ -111,7 +111,7 @@ import { StudioSettingsComponent } from './studio-settings.component';
           (stopRecording)="stopRecording()"
           (switchMode)="cycleRecordingMode()"
           (toggleSettings)="isSettingsOpen.set(true)"
-        />
+        ></app-recording-controls>
       }
 
       <!-- 6. Modals -->
@@ -121,7 +121,7 @@ import { StudioSettingsComponent } from './studio-settings.component';
           [isLoading]="isLoadingScripts()"
           (select)="onScriptSelected($event)"
           (close)="isScriptSelectorOpen.set(false)"
-        />
+        ></app-script-selector>
       }
 
       @if (isSettingsOpen()) {
@@ -135,7 +135,7 @@ import { StudioSettingsComponent } from './studio-settings.component';
           (changeMask)="adjustMaskOpacity($event)"
           (toggleShadow)="textShadowEnabled.set(!textShadowEnabled())"
           (close)="isSettingsOpen.set(false)"
-        />
+        ></app-studio-settings>
       }
 
     </div>

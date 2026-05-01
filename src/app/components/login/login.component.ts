@@ -72,7 +72,7 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
       @if (showCgu()) {
         <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6 shadow-2xl">
           <div class="bg-white dark:bg-[#0A0A0C] w-full max-w-4xl h-full max-h-[90vh] rounded-3xl overflow-hidden flex flex-col relative shadow-[0_0_40px_rgba(0,0,0,0.3)] border border-white/10">
-            <app-cgu [isPopup]="true" (closePopup)="showCgu.set(false)" class="h-full block overflow-y-auto" />
+            <app-cgu [isPopup]="true" (closePopup)="showCgu.set(false)" class="h-full block overflow-y-auto"></app-cgu>
           </div>
         </div>
       }

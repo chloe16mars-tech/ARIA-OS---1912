@@ -112,7 +112,7 @@ import { VideoPlayerModalComponent } from './video-player-modal.component';
               (restore)="restoreVideo(video)"
               (hardDelete)="permanentlyDelete(video)"
               (studio)="openInStudio(video)"
-            />
+            ></app-video-card>
           }
         </div>
       }
@@ -134,7 +134,7 @@ import { VideoPlayerModalComponent } from './video-player-modal.component';
         [video]="videoPlayerModal()!"
         (close)="videoPlayerModal.set(null)"
         (share)="shareVideo(videoPlayerModal()!)"
-      />
+      ></app-video-player-modal>
     }
   `,
   styles: [`

@@ -103,7 +103,7 @@ export class CguComponent {
     this.isLoading.set(true);
     try {
       const data = await this.appConfigService.getLegalContent(tab === 'legal' ? 'mentions' : tab);
-      if (data && data.content_html) {
+      if (data && data.content_html && !data.content_html.includes('Contenu par défaut')) {
         this.dynamicContent.set(data.content_html);
       } else {
         this.dynamicContent.set(null);
